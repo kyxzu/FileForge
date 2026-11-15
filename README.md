@@ -21,6 +21,10 @@ Convert, compress, resize, and inspect PNG, JPEG, and WebP images with a simple 
 
 Select or drag and drop multiple images. The app previews your selection and lets you remove individual files or clear the list. A light and dark theme toggle remembers your choice in browser storage when available.
 
+## Install on Android or desktop
+
+FileForge is an installable web app. On Android and supported desktop browsers, use the **Install** button when it appears or choose the browser's install option. The app shell is cached for repeat launches and offline use after the first online visit. Image processing remains in the browser.
+
 ## Built with
 
 - Vanilla JavaScript and browser APIs, including Canvas, the File API, and `createImageBitmap`
