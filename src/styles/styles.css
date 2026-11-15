@@ -1433,3 +1433,18 @@ button:disabled {
     min-height: 44px;
   }
 }
+
+
+/* Crop controls for the image resizer */
+.converter-control-wide {
+  grid-column: 1 / -1;
+}
+
+.converter-control[hidden] {
+  display: none;
+}
+
+.crop-position-value {
+  color: var(--accent);
+  font-weight: 700;
+}
