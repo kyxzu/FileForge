@@ -1601,3 +1601,54 @@ body { line-height: 1.55; }
   .privacy-label { margin-left: 0; }
   .footer { gap: 8px; }
 }
+
+/* Stronger contrast and boundaries in light mode */
+:root[data-theme="light"] {
+  --bg: #f1f2ef;
+  --surface: #ffffff;
+  --surface-hover: #e8ebe5;
+  --border: #a5ada0;
+  --text: #171a16;
+  --muted: #41483f;
+  --accent: #455a37;
+  --accent-soft: rgba(69, 90, 55, .1);
+}
+:root[data-theme="light"] .upload-zone { border-color: #737c70; }
+:root[data-theme="light"] .tool-card,
+:root[data-theme="light"] .file-item,
+:root[data-theme="light"] .converter-result-card,
+:root[data-theme="light"] .compressor-result-card,
+:root[data-theme="light"] .inspector-card,
+:root[data-theme="light"] .crop-editor-dialog,
+:root[data-theme="light"] .converter-dialog,
+:root[data-theme="light"] .compressor-dialog,
+:root[data-theme="light"] .inspector-dialog {
+  border-color: #9aa396;
+}
+:root[data-theme="light"] .converter-control select,
+:root[data-theme="light"] .compressor-setting select,
+:root[data-theme="light"] .crop-editor-toolbar select,
+:root[data-theme="light"] .crop-field select,
+:root[data-theme="light"] .crop-field input[type="number"] {
+  border-color: #737c70;
+}
+:root[data-theme="light"] .button-primary {
+  border: 1px solid #171a16;
+  background: #20251e;
+  color: #ffffff;
+}
+:root[data-theme="light"] .button-primary:hover {
+  border-color: #34442b;
+  background: #34442b;
+  color: #ffffff;
+}
+:root[data-theme="light"] .button-secondary,
+:root[data-theme="light"] .theme-toggle {
+  border-color: #737c70;
+}
+:root[data-theme="light"] .privacy-label { color: #365329; }
+:root[data-theme="light"] :focus-visible {
+  outline: 3px solid #283620;
+  outline-offset: 3px;
+  box-shadow: 0 0 0 2px #ffffff;
+}
