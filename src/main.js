@@ -1,5 +1,5 @@
 import "./styles/styles.css";
-import { initializeApp } from "./app.js";
+import { initializeApp, showToast } from "./app.js";
 
 initializeApp();
 initializePwa();
@@ -14,7 +14,7 @@ function initializePwa() {
     installButton.className = "install-button button button-primary";
     installButton.textContent = "Install";
     installButton.setAttribute("aria-label", "Install FileForge");
-    installButton.hidden = true;
+    installButton.hidden = false;
     themeToggle.before(installButton);
 
     let deferredInstallPrompt = null;
@@ -22,20 +22,25 @@ function initializePwa() {
       window.matchMedia("(display-mode: standalone)").matches ||
       window.navigator.standalone === true;
 
-    if (!isInstalled) {
+    if (isInstalled) {
+      installButton.hidden = true;
+    } else {
       window.addEventListener("beforeinstallprompt", (event) => {
         event.preventDefault();
         deferredInstallPrompt = event;
-        installButton.hidden = false;
       });
 
       installButton.addEventListener("click", async () => {
-        if (!deferredInstallPrompt) return;
+        if (!deferredInstallPrompt) {
+          showToast("To install FileForge, use Install app or Add to Home Screen in your browser menu.");
+          return;
+        }
 
         const installPrompt = deferredInstallPrompt;
         deferredInstallPrompt = null;
-        installButton.hidden = true;
         await installPrompt.prompt();
+        const choice = await installPrompt.userChoice;
+        if (choice.outcome === "accepted") installButton.hidden = true;
       });
 
       window.addEventListener("appinstalled", () => {
