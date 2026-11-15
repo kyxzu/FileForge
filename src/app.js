@@ -777,80 +777,41 @@ function showImageResizer(files) {
       <div>
         <span class="converter-label">FILEFORGE / RESIZING</span>
         <h2>Image Resizer</h2>
-        <p>Fit images within bounds or crop them to exact dimensions.</p>
+        <p>Fit images within bounds or open the visual crop editor.</p>
       </div>
       <button class="converter-close" type="button" aria-label="Close">×</button>
     </div>
     <div class="converter-controls">
       <div class="converter-control">
-        <label for="resize-width" id="resize-width-label">Maximum width (px)</label>
+        <label for="resize-width">Maximum width (px)</label>
         <input id="resize-width" type="number" min="1" max="12000" value="1200">
       </div>
       <div class="converter-control">
-        <label for="resize-height" id="resize-height-label">Maximum height (px)</label>
+        <label for="resize-height">Maximum height (px)</label>
         <input id="resize-height" type="number" min="1" max="12000" value="1200">
       </div>
-      <div class="converter-control converter-control-wide">
-        <label for="resize-mode">Resize mode</label>
-        <select id="resize-mode">
-          <option value="fit">Fit inside bounds</option>
-          <option value="crop">Crop to exact dimensions</option>
-        </select>
-        <small>Fit keeps the whole image. Crop fills the target size and may trim the edges.</small>
-      </div>
-      <div class="converter-control" id="crop-horizontal-control" hidden>
-        <label for="crop-horizontal">
-          Horizontal crop position
-          <span class="crop-position-value" id="crop-horizontal-value">50%</span>
-        </label>
-        <input id="crop-horizontal" type="range" min="0" max="100" value="50">
-        <small>Move the crop left or right. This position applies to every selected image.</small>
-      </div>
-      <div class="converter-control" id="crop-vertical-control" hidden>
-        <label for="crop-vertical">
-          Vertical crop position
-          <span class="crop-position-value" id="crop-vertical-value">50%</span>
-        </label>
-        <input id="crop-vertical" type="range" min="0" max="100" value="50">
-        <small>Move the crop up or down. This position applies to every selected image.</small>
-      </div>
     </div>
-    <div class="converter-actions">
+    <div class="converter-actions resizer-actions">
       <span>${files.length} ${files.length === 1 ? "file" : "files"} selected</span>
-      <button class="button button-primary" id="resize-button">Resize images</button>
+      <div>
+        <button class="button button-secondary" id="open-crop-editor">Open crop editor</button>
+        <button class="button button-primary" id="resize-button">Resize images</button>
+      </div>
     </div>
     <div class="converter-results" id="resize-results" aria-live="polite">
-      <div class="converter-empty">Processed images will appear here.</div>
+      <div class="converter-empty">Resized images will appear here.</div>
     </div>
     <div class="converter-footer"><span>◈ PROCESSED LOCALLY</span><span>NO FILE UPLOADS</span></div>`;
 
   document.body.appendChild(dialog);
   const closeButton = dialog.querySelector(".converter-close");
   const resizeButton = dialog.querySelector("#resize-button");
+  const cropButton = dialog.querySelector("#open-crop-editor");
   const results = dialog.querySelector("#resize-results");
-  const modeSelect = dialog.querySelector("#resize-mode");
-  const widthLabel = dialog.querySelector("#resize-width-label");
-  const heightLabel = dialog.querySelector("#resize-height-label");
-  const cropHorizontal = dialog.querySelector("#crop-horizontal");
-  const cropVertical = dialog.querySelector("#crop-vertical");
   const widthInput = dialog.querySelector("#resize-width");
   const heightInput = dialog.querySelector("#resize-height");
-  const cropHorizontalControl = dialog.querySelector("#crop-horizontal-control");
-  const cropVerticalControl = dialog.querySelector("#crop-vertical-control");
   const urls = [];
   let cancelled = false;
-
-  function updateResizeMode() {
-    const isCropMode = modeSelect.value === "crop";
-    widthLabel.textContent = isCropMode ? "Target width (px)" : "Maximum width (px)";
-    heightLabel.textContent = isCropMode ? "Target height (px)" : "Maximum height (px)";
-    cropHorizontalControl.hidden = !isCropMode;
-    cropVerticalControl.hidden = !isCropMode;
-    resizeButton.textContent = isCropMode ? "Crop images" : "Resize images";
-    urls.forEach((url) => URL.revokeObjectURL(url));
-    urls.length = 0;
-    results.innerHTML = `<div class="converter-empty">Processed images will appear here.</div>`;
-  }
 
   function cleanup() {
     cancelled = true;
@@ -863,55 +824,35 @@ function showImageResizer(files) {
     if (event.target === dialog) dialog.close();
   });
   dialog.addEventListener("close", cleanup);
-  modeSelect.addEventListener("change", updateResizeMode);
-  cropHorizontal.addEventListener("input", () => {
-    dialog.querySelector("#crop-horizontal-value").textContent = `${cropHorizontal.value}%`;
-  });
-  cropVertical.addEventListener("input", () => {
-    dialog.querySelector("#crop-vertical-value").textContent = `${cropVertical.value}%`;
+  cropButton.addEventListener("click", () => {
+    dialog.addEventListener("close", () => showImageCropEditor(files), { once: true });
+    dialog.close();
   });
 
   resizeButton.addEventListener("click", async () => {
-    const width = Number(dialog.querySelector("#resize-width").value);
-    const height = Number(dialog.querySelector("#resize-height").value);
-    const mode = modeSelect.value;
-    const isCropMode = mode === "crop";
-
+    const width = Number(widthInput.value);
+    const height = Number(heightInput.value);
     if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1 || width > 12000 || height > 12000) {
       showToast("Enter dimensions between 1 and 12,000 pixels.");
       return;
     }
-
-    if (isCropMode && width * height > 64_000_000) {
-      showToast("Crop output cannot exceed 64 million pixels.");
-      return;
-    }
-
-    const horizontalPosition = Number(cropHorizontal.value) / 100;
-    const verticalPosition = Number(cropVertical.value) / 100;
-    const action = isCropMode ? "Cropping" : "Resizing";
-    setControlsDisabled(true);
     resizeButton.disabled = true;
-    resizeButton.textContent = isCropMode ? "Cropping..." : "Resizing...";
+    cropButton.disabled = true;
+    resizeButton.textContent = "Resizing...";
     urls.forEach((url) => URL.revokeObjectURL(url));
     urls.length = 0;
     results.innerHTML = `<div class="converter-empty" aria-live="polite"></div>`;
     const processed = [];
-
     for (const [index, file] of files.entries()) {
       if (cancelled) return;
-      results.querySelector(".converter-empty").textContent =
-        `${action} ${index + 1} of ${files.length}: ${file.name}`;
+      results.querySelector(".converter-empty").textContent = `Resizing ${index + 1} of ${files.length}: ${file.name}`;
       try {
-        processed.push(
-          await resizeImage(file, width, height, mode, horizontalPosition, verticalPosition)
-        );
+        processed.push(await resizeImage(file, width, height));
       } catch (error) {
         processed.push({ original: file, error: true, message: error.message });
       }
     }
     if (cancelled) return;
-
     results.innerHTML = "";
     processed.forEach((result) => {
       const card = document.createElement("article");
@@ -927,7 +868,7 @@ function showImageResizer(files) {
         const image = document.createElement("img");
         image.className = "converter-preview";
         image.src = url;
-        image.alt = `${isCropMode ? "Cropped" : "Resized"} ${result.name}`;
+        image.alt = `Resized ${result.name}`;
         const info = document.createElement("div");
         info.className = "converter-result-info";
         const name = document.createElement("strong");
@@ -943,92 +884,276 @@ function showImageResizer(files) {
       }
       results.append(card);
     });
-    setControlsDisabled(false);
     resizeButton.disabled = false;
-    resizeButton.textContent = isCropMode ? "Crop again" : "Resize again";
+    cropButton.disabled = false;
+    resizeButton.textContent = "Resize again";
   });
 
-  updateResizeMode();
   dialog.showModal();
 }
 
-async function resizeImage(file, maxWidth, maxHeight, mode = "fit", cropX = 0.5, cropY = 0.5) {
+async function resizeImage(file, maxWidth, maxHeight) {
   const bitmap = await createImageBitmap(file);
   try {
-    let width;
-    let height;
-    let sourceX = 0;
-    let sourceY = 0;
-    let sourceWidth = bitmap.width;
-    let sourceHeight = bitmap.height;
-
-    if (mode === "crop") {
-      if (maxWidth * maxHeight > 64_000_000) {
-        throw new Error("Crop output cannot exceed 64 million pixels.");
-      }
-
-      const targetRatio = maxWidth / maxHeight;
-      const sourceRatio = bitmap.width / bitmap.height;
-      if (sourceRatio > targetRatio) {
-        sourceWidth = bitmap.height * targetRatio;
-        sourceX = (bitmap.width - sourceWidth) * cropX;
-      } else if (sourceRatio < targetRatio) {
-        sourceHeight = bitmap.width / targetRatio;
-        sourceY = (bitmap.height - sourceHeight) * cropY;
-      }
-      width = maxWidth;
-      height = maxHeight;
-    } else {
-      const scale = Math.min(1, maxWidth / bitmap.width, maxHeight / bitmap.height);
-      width = Math.max(1, Math.round(bitmap.width * scale));
-      height = Math.max(1, Math.round(bitmap.height * scale));
-    }
-
+    const scale = Math.min(1, maxWidth / bitmap.width, maxHeight / bitmap.height);
+    const width = Math.max(1, Math.round(bitmap.width * scale));
+    const height = Math.max(1, Math.round(bitmap.height * scale));
     const canvas = document.createElement("canvas");
     canvas.width = width;
     canvas.height = height;
     const context = canvas.getContext("2d");
     if (!context) throw new Error("Canvas is not supported.");
-
     if (file.type === "image/jpeg") {
       context.fillStyle = "#fff";
       context.fillRect(0, 0, width, height);
     }
-
-    context.drawImage(
-      bitmap,
-      sourceX,
-      sourceY,
-      sourceWidth,
-      sourceHeight,
-      0,
-      0,
-      width,
-      height
-    );
+    context.drawImage(bitmap, 0, 0, width, height);
     const blob = await new Promise((resolve, reject) =>
-      canvas.toBlob(
-        (value) => value
-          ? resolve(value)
-          : reject(new Error("Could not process this image.")),
-        file.type
-      )
+      canvas.toBlob((value) => value ? resolve(value) : reject(new Error("Could not process this image.")), file.type)
     );
     const extension = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp" }[blob.type];
-    if (!extension || blob.type !== file.type) {
-      throw new Error("Your browser could not preserve this image format.");
-    }
-
-    const suffix = mode === "crop" ? "cropped" : "resized";
-    return {
-      blob,
-      width,
-      height,
-      name: `${file.name.replace(/\.[^/.]+$/, "")}-${suffix}.${extension}`,
-    };
+    if (!extension || blob.type !== file.type) throw new Error("Your browser could not preserve this image format.");
+    return { blob, width, height, name: `${file.name.replace(/\.[^/.]+$/, "")}-resized.${extension}` };
   } finally {
     bitmap.close();
   }
+}
+
+function showImageCropEditor(files) {
+  const dialog = document.createElement("dialog");
+  dialog.className = "crop-editor-dialog";
+  dialog.innerHTML = `
+    <header class="crop-editor-header">
+      <div><span class="converter-label">FILEFORGE / CROP</span><h2>Crop image</h2><p>Drag the selection to frame your image. Resize it from a corner.</p></div>
+      <button class="converter-close" type="button" aria-label="Close crop editor">×</button>
+    </header>
+    <div class="crop-editor-layout">
+      <section class="crop-editor-workspace">
+        <div class="crop-editor-toolbar">
+          <label>Image <select id="crop-file"></select></label>
+          <div class="crop-editor-tabs" role="tablist" aria-label="Crop shape">
+            <button type="button" class="is-active" data-shape="rectangle" role="tab" aria-selected="true">Default crop</button>
+            <button type="button" data-shape="circle" role="tab" aria-selected="false">Circle crop</button>
+          </div>
+        </div>
+        <div class="crop-editor-stage" id="crop-stage">
+          <canvas id="crop-source" aria-label="Image crop selection"></canvas>
+        </div>
+        <p class="crop-editor-hint">Drag inside the selection to move it. Drag a corner to resize.</p>
+      </section>
+      <aside class="crop-editor-settings">
+        <div class="crop-editor-preview-wrap"><strong>Preview</strong><canvas id="crop-preview" aria-label="Cropped image preview"></canvas></div>
+        <h3>Crop settings</h3>
+        <label class="crop-field">Aspect ratio
+          <select id="crop-ratio">
+            <option value="1:1">Square (1:1)</option><option value="4:3">Standard (4:3)</option><option value="3:2">Photo (3:2)</option><option value="16:9">Wide (16:9)</option><option value="9:16">Portrait (9:16)</option><option value="original">Original</option><option value="free">Free</option>
+          </select>
+        </label>
+        <div class="crop-dimensions">
+          <label class="crop-field">Width (px)<input id="crop-width" type="number" min="1" max="12000" value="512"></label>
+          <label class="crop-field">Height (px)<input id="crop-height" type="number" min="1" max="12000" value="512"></label>
+        </div>
+        <label class="crop-field">Target file
+          <select id="crop-format"><option value="image/jpeg">.JPG</option><option value="image/png">.PNG</option><option value="image/webp">.WEBP</option></select>
+        </label>
+        <label class="crop-field" id="crop-quality-wrap">Image quality <span id="crop-quality-label">90%</span>
+          <input id="crop-quality" type="range" min="10" max="100" value="90">
+        </label>
+        <button class="button button-primary crop-download" id="crop-download">Download crop</button>
+        <p class="crop-editor-note">Crop processing happens in your browser. Circle crops have a transparent background in PNG and WebP; JPG uses a white background.</p>
+      </aside>
+    </div>`;
+  document.body.appendChild(dialog);
+
+  const sourceCanvas = dialog.querySelector("#crop-source");
+  const previewCanvas = dialog.querySelector("#crop-preview");
+  const stage = dialog.querySelector("#crop-stage");
+  const fileSelect = dialog.querySelector("#crop-file");
+  const ratioSelect = dialog.querySelector("#crop-ratio");
+  const widthInput = dialog.querySelector("#crop-width");
+  const heightInput = dialog.querySelector("#crop-height");
+  const formatSelect = dialog.querySelector("#crop-format");
+  const quality = dialog.querySelector("#crop-quality");
+  const qualityLabel = dialog.querySelector("#crop-quality-label");
+  const qualityWrap = dialog.querySelector("#crop-quality-wrap");
+  const downloadButton = dialog.querySelector("#crop-download");
+  const ctx = sourceCanvas.getContext("2d");
+  const previewCtx = previewCanvas.getContext("2d");
+  const state = { bitmap: null, file: null, crop: null, shape: "rectangle", dragging: false, resizing: false, pointer: null, frame: null };
+
+  files.forEach((file, index) => {
+    const option = document.createElement("option");
+    option.value = String(index);
+    option.textContent = file.name;
+    fileSelect.append(option);
+  });
+
+  function setCropFromRatio() {
+    if (!state.bitmap) return;
+    const ratioValue = ratioSelect.value;
+    const ratio = ratioValue === "original" ? state.bitmap.width / state.bitmap.height : ratioValue === "free" ? null : ratioValue.split(":").map(Number).reduce((a, b) => a / b);
+    const maxW = state.bitmap.width;
+    const maxH = state.bitmap.height;
+    let w = maxW;
+    let h = ratio ? w / ratio : maxH;
+    if (h > maxH) { h = maxH; w = ratio ? h * ratio : maxW; }
+    state.crop = { x: (maxW - w) / 2, y: (maxH - h) / 2, w, h };
+    if (state.shape === "circle") {
+      const side = Math.min(w, h);
+      state.crop = { x: (maxW - side) / 2, y: (maxH - side) / 2, w: side, h: side };
+    }
+    widthInput.value = String(Math.max(1, Math.round(state.crop.w)));
+    heightInput.value = String(Math.max(1, Math.round(state.crop.h)));
+    draw();
+  }
+
+  function draw() {
+    if (!state.bitmap) return;
+    const box = stage.getBoundingClientRect();
+    const maxW = Math.max(200, box.width - 28);
+    const maxH = Math.max(180, Math.min(620, window.innerHeight * 0.65));
+    const scale = Math.min(maxW / state.bitmap.width, maxH / state.bitmap.height);
+    const canvasW = Math.max(1, Math.round(state.bitmap.width * scale));
+    const canvasH = Math.max(1, Math.round(state.bitmap.height * scale));
+    sourceCanvas.width = canvasW;
+    sourceCanvas.height = canvasH;
+    sourceCanvas.style.width = canvasW + "px";
+    sourceCanvas.style.height = canvasH + "px";
+    ctx.drawImage(state.bitmap, 0, 0, canvasW, canvasH);
+    const s = canvasW / state.bitmap.width;
+    const c = state.crop;
+    const x = c.x * s, y = c.y * s, w = c.w * s, h = c.h * s;
+    ctx.save();
+    ctx.fillStyle = "rgba(7, 12, 18, .68)";
+    ctx.beginPath();
+    ctx.rect(0, 0, canvasW, canvasH);
+    if (state.shape === "circle") { ctx.arc(x + w / 2, y + h / 2, w / 2, 0, Math.PI * 2, true); }
+    else ctx.rect(x, y, w, h);
+    ctx.fill("evenodd");
+    ctx.restore();
+    ctx.save();
+    ctx.strokeStyle = "#50a9ff";
+    ctx.lineWidth = 2;
+    if (state.shape === "circle") { ctx.beginPath(); ctx.arc(x + w / 2, y + h / 2, w / 2, 0, Math.PI * 2); ctx.stroke(); }
+    else { ctx.strokeRect(x, y, w, h); [[x,y],[x+w,y],[x,y+h],[x+w,y+h]].forEach(([px,py]) => { ctx.fillStyle="#fff"; ctx.fillRect(px-4,py-4,8,8); ctx.strokeRect(px-4,py-4,8,8); }); }
+    ctx.restore();
+
+    const outW = Math.min(12000, Math.max(1, Number(widthInput.value) || 1));
+    const outH = Math.min(12000, Math.max(1, Number(heightInput.value) || 1));
+    const previewScale = Math.min(1, 240 / outW, 200 / outH);
+    previewCanvas.width = Math.max(1, Math.round(outW * previewScale));
+    previewCanvas.height = Math.max(1, Math.round(outH * previewScale));
+    previewCtx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
+    if (formatSelect.value === "image/jpeg") { previewCtx.fillStyle="#fff"; previewCtx.fillRect(0,0,previewCanvas.width,previewCanvas.height); }
+    previewCtx.save();
+    if (state.shape === "circle") { previewCtx.beginPath(); previewCtx.arc(previewCanvas.width/2,previewCanvas.height/2,Math.min(previewCanvas.width,previewCanvas.height)/2,0,Math.PI*2); previewCtx.clip(); }
+    previewCtx.drawImage(state.bitmap, c.x,c.y,c.w,c.h,0,0,previewCanvas.width,previewCanvas.height);
+    previewCtx.restore();
+  }
+
+  async function loadSelectedFile() {
+    if (state.bitmap) state.bitmap.close();
+    state.file = files[Number(fileSelect.value)];
+    try {
+      state.bitmap = await createImageBitmap(state.file);
+      setCropFromRatio();
+    } catch {
+      showToast("Could not open this image in the crop editor.");
+    }
+  }
+
+  function applyDimensionChange(changed) {
+    if (!state.bitmap || !state.crop) return;
+    let w = Math.min(state.bitmap.width, Math.max(1, Number(widthInput.value) || 1));
+    let h = Math.min(state.bitmap.height, Math.max(1, Number(heightInput.value) || 1));
+    const ratioValue = ratioSelect.value;
+    const ratio = state.shape === "circle" ? 1 : ratioValue === "free" ? null : ratioValue === "original" ? state.bitmap.width/state.bitmap.height : ratioValue.split(":").map(Number).reduce((a,b)=>a/b);
+    if (ratio) { if (changed === "width") h = w / ratio; else w = h * ratio; }
+    if (state.shape === "circle") w = h = Math.min(w,h);
+    const factor = Math.min(1, state.bitmap.width/w, state.bitmap.height/h);
+    w *= factor; h *= factor;
+    state.crop.w=w; state.crop.h=h;
+    state.crop.x=Math.min(Math.max(0,state.crop.x),state.bitmap.width-w);
+    state.crop.y=Math.min(Math.max(0,state.crop.y),state.bitmap.height-h);
+    widthInput.value=String(Math.max(1,Math.round(w)));
+    heightInput.value=String(Math.max(1,Math.round(h)));
+    draw();
+  }
+
+  function pointerDown(event) {
+    const rect=sourceCanvas.getBoundingClientRect(), s=rect.width/state.bitmap.width;
+    const px=(event.clientX-rect.left)/s, py=(event.clientY-rect.top)/s, c=state.crop;
+    const nearCorner=(px>c.x+c.w-18/s && py>c.y+c.h-18/s);
+    state.resizing=nearCorner && state.shape!=="circle";
+    state.dragging=!state.resizing && px>=c.x && px<=c.x+c.w && py>=c.y && py<=c.y+c.h;
+    if (!state.dragging && !state.resizing) return;
+    state.pointer={x:px,y:py,crop:{...c}};
+    sourceCanvas.setPointerCapture(event.pointerId);
+  }
+  function pointerMove(event) {
+    if (!state.pointer) return;
+    const rect=sourceCanvas.getBoundingClientRect(), s=rect.width/state.bitmap.width;
+    const px=(event.clientX-rect.left)/s, py=(event.clientY-rect.top)/s;
+    const dx=px-state.pointer.x, dy=py-state.pointer.y, c=state.pointer.crop;
+    if (state.resizing) {
+      const ratio=state.shape==="circle"?1:(ratioSelect.value==="free"?null:ratioSelect.value==="original"?state.bitmap.width/state.bitmap.height:ratioSelect.value.split(":").map(Number).reduce((a,b)=>a/b));
+      let w=Math.max(24/s,c.w+dx), h=ratio?w/ratio:Math.max(24/s,c.h+dy);
+      const factor=Math.min(1,(state.bitmap.width-c.x)/w,(state.bitmap.height-c.y)/h);
+      w*=factor; h*=factor; state.crop={...c,w,h};
+      widthInput.value=String(Math.round(w)); heightInput.value=String(Math.round(h));
+    } else {
+      state.crop.x=Math.min(Math.max(0,c.x+dx),state.bitmap.width-c.w);
+      state.crop.y=Math.min(Math.max(0,c.y+dy),state.bitmap.height-c.h);
+    }
+    draw();
+  }
+  function pointerUp() { state.pointer=null; state.dragging=false; state.resizing=false; }
+
+  dialog.querySelector(".converter-close").addEventListener("click",()=>dialog.close());
+  dialog.addEventListener("click",event=>{if(event.target===dialog)dialog.close();});
+  dialog.addEventListener("close",()=>{if(state.bitmap)state.bitmap.close();dialog.remove();});
+  fileSelect.addEventListener("change",loadSelectedFile);
+  ratioSelect.addEventListener("change",setCropFromRatio);
+  widthInput.addEventListener("input",()=>applyDimensionChange("width"));
+  heightInput.addEventListener("input",()=>applyDimensionChange("height"));
+  formatSelect.addEventListener("change",()=>{qualityWrap.hidden=formatSelect.value==="image/png";draw();});
+  quality.addEventListener("input",()=>{qualityLabel.textContent=quality.value+"%";});
+  dialog.querySelectorAll("[data-shape]").forEach(tab=>tab.addEventListener("click",()=>{
+    state.shape=tab.dataset.shape;
+    dialog.querySelectorAll("[data-shape]").forEach(item=>{item.classList.toggle("is-active",item===tab);item.setAttribute("aria-selected",String(item===tab));});
+    if(state.shape==="circle"){ratioSelect.value="1:1";ratioSelect.disabled=true;}else ratioSelect.disabled=false;
+    setCropFromRatio();
+  }));
+  sourceCanvas.addEventListener("pointerdown",pointerDown);
+  sourceCanvas.addEventListener("pointermove",pointerMove);
+  sourceCanvas.addEventListener("pointerup",pointerUp);
+  sourceCanvas.addEventListener("pointercancel",pointerUp);
+  window.addEventListener("resize",draw);
+  dialog.addEventListener("close",()=>window.removeEventListener("resize",draw),{once:true});
+  downloadButton.addEventListener("click",async()=>{
+    if(!state.bitmap||!state.file)return;
+    const width=Math.min(12000,Math.max(1,Number(widthInput.value)||1));
+    const height=Math.min(12000,Math.max(1,Number(heightInput.value)||1));
+    if(width*height>64_000_000){showToast("Crop output cannot exceed 64 million pixels.");return;}
+    const canvas=document.createElement("canvas");canvas.width=width;canvas.height=height;
+    const context=canvas.getContext("2d");if(!context){showToast("Canvas is not supported.");return;}
+    if(formatSelect.value==="image/jpeg"){context.fillStyle="#fff";context.fillRect(0,0,width,height);}
+    if(state.shape==="circle"){context.beginPath();context.arc(width/2,height/2,Math.min(width,height)/2,0,Math.PI*2);context.clip();}
+    context.drawImage(state.bitmap,state.crop.x,state.crop.y,state.crop.w,state.crop.h,0,0,width,height);
+    downloadButton.disabled=true;downloadButton.textContent="Preparing...";
+    try{
+      const type=formatSelect.value;
+      const blob=await new Promise((resolve,reject)=>canvas.toBlob(value=>value?resolve(value):reject(new Error("Could not create this crop.")),type,type==="image/png"?undefined:Number(quality.value)/100));
+      if(blob.type!==type)throw new Error("Your browser could not create the selected format.");
+      const extension={"image/jpeg":"jpg","image/png":"png","image/webp":"webp"}[type];
+      downloadBlob(blob,`${state.file.name.replace(/\.[^/.]+$/,"")}-crop.${extension}`);
+    }catch(error){showToast(error.message);}
+    finally{downloadButton.disabled=false;downloadButton.textContent="Download crop";}
+  });
+  formatSelect.value="image/jpeg";
+  qualityWrap.hidden=false;
+  dialog.showModal();
+  loadSelectedFile();
 }
 
 function renderConversionResults(container, convertedFiles, previewUrls) {
