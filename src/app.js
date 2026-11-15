@@ -630,6 +630,12 @@ function showImageConverter(files) {
   const qualityControl = dialog.querySelector("#quality-control");
   const results = dialog.querySelector("#converter-results");
 
+  function setControlsDisabled(disabled) {
+    [widthInput, heightInput, modeSelect, cropHorizontal, cropVertical].forEach((control) => {
+      control.disabled = disabled;
+    });
+  }
+
   function cleanup() {
     cancelled = true;
     previewUrls.forEach((url) => URL.revokeObjectURL(url));
@@ -768,63 +774,146 @@ function showImageResizer(files) {
   dialog.className = "converter-dialog";
   dialog.innerHTML = `
     <div class="converter-header">
-      <div><span class="converter-label">FILEFORGE / RESIZING</span><h2>Image Resizer</h2>
-      <p>Set a maximum size. Images keep their original proportions.</p></div>
+      <div>
+        <span class="converter-label">FILEFORGE / RESIZING</span>
+        <h2>Image Resizer</h2>
+        <p>Fit images within bounds or crop them to exact dimensions.</p>
+      </div>
       <button class="converter-close" type="button" aria-label="Close">×</button>
     </div>
     <div class="converter-controls">
-      <div class="converter-control"><label for="resize-width">Maximum width (px)</label><input id="resize-width" type="number" min="1" max="12000" value="1200"></div>
-      <div class="converter-control"><label for="resize-height">Maximum height (px)</label><input id="resize-height" type="number" min="1" max="12000" value="1200"></div>
+      <div class="converter-control">
+        <label for="resize-width" id="resize-width-label">Maximum width (px)</label>
+        <input id="resize-width" type="number" min="1" max="12000" value="1200">
+      </div>
+      <div class="converter-control">
+        <label for="resize-height" id="resize-height-label">Maximum height (px)</label>
+        <input id="resize-height" type="number" min="1" max="12000" value="1200">
+      </div>
+      <div class="converter-control converter-control-wide">
+        <label for="resize-mode">Resize mode</label>
+        <select id="resize-mode">
+          <option value="fit">Fit inside bounds</option>
+          <option value="crop">Crop to exact dimensions</option>
+        </select>
+        <small>Fit keeps the whole image. Crop fills the target size and may trim the edges.</small>
+      </div>
+      <div class="converter-control" id="crop-horizontal-control" hidden>
+        <label for="crop-horizontal">
+          Horizontal crop position
+          <span class="crop-position-value" id="crop-horizontal-value">50%</span>
+        </label>
+        <input id="crop-horizontal" type="range" min="0" max="100" value="50">
+        <small>Move the crop left or right. This position applies to every selected image.</small>
+      </div>
+      <div class="converter-control" id="crop-vertical-control" hidden>
+        <label for="crop-vertical">
+          Vertical crop position
+          <span class="crop-position-value" id="crop-vertical-value">50%</span>
+        </label>
+        <input id="crop-vertical" type="range" min="0" max="100" value="50">
+        <small>Move the crop up or down. This position applies to every selected image.</small>
+      </div>
     </div>
-    <div class="converter-actions"><span>${files.length} ${files.length === 1 ? "file" : "files"} selected</span><button class="button button-primary" id="resize-button">Resize images</button></div>
-    <div class="converter-results" id="resize-results" aria-live="polite"><div class="converter-empty">Resized images will appear here.</div></div>
+    <div class="converter-actions">
+      <span>${files.length} ${files.length === 1 ? "file" : "files"} selected</span>
+      <button class="button button-primary" id="resize-button">Resize images</button>
+    </div>
+    <div class="converter-results" id="resize-results" aria-live="polite">
+      <div class="converter-empty">Processed images will appear here.</div>
+    </div>
     <div class="converter-footer"><span>◈ PROCESSED LOCALLY</span><span>NO FILE UPLOADS</span></div>`;
 
   document.body.appendChild(dialog);
   const closeButton = dialog.querySelector(".converter-close");
   const resizeButton = dialog.querySelector("#resize-button");
   const results = dialog.querySelector("#resize-results");
+  const modeSelect = dialog.querySelector("#resize-mode");
+  const widthLabel = dialog.querySelector("#resize-width-label");
+  const heightLabel = dialog.querySelector("#resize-height-label");
+  const cropHorizontal = dialog.querySelector("#crop-horizontal");
+  const cropVertical = dialog.querySelector("#crop-vertical");
+  const widthInput = dialog.querySelector("#resize-width");
+  const heightInput = dialog.querySelector("#resize-height");
+  const cropHorizontalControl = dialog.querySelector("#crop-horizontal-control");
+  const cropVerticalControl = dialog.querySelector("#crop-vertical-control");
   const urls = [];
   let cancelled = false;
+
+  function updateResizeMode() {
+    const isCropMode = modeSelect.value === "crop";
+    widthLabel.textContent = isCropMode ? "Target width (px)" : "Maximum width (px)";
+    heightLabel.textContent = isCropMode ? "Target height (px)" : "Maximum height (px)";
+    cropHorizontalControl.hidden = !isCropMode;
+    cropVerticalControl.hidden = !isCropMode;
+    resizeButton.textContent = isCropMode ? "Crop images" : "Resize images";
+    urls.forEach((url) => URL.revokeObjectURL(url));
+    urls.length = 0;
+    results.innerHTML = `<div class="converter-empty">Processed images will appear here.</div>`;
+  }
 
   function cleanup() {
     cancelled = true;
     urls.forEach((url) => URL.revokeObjectURL(url));
     dialog.remove();
   }
+
   closeButton.addEventListener("click", () => dialog.close());
   dialog.addEventListener("click", (event) => {
     if (event.target === dialog) dialog.close();
   });
   dialog.addEventListener("close", cleanup);
+  modeSelect.addEventListener("change", updateResizeMode);
+  cropHorizontal.addEventListener("input", () => {
+    dialog.querySelector("#crop-horizontal-value").textContent = `${cropHorizontal.value}%`;
+  });
+  cropVertical.addEventListener("input", () => {
+    dialog.querySelector("#crop-vertical-value").textContent = `${cropVertical.value}%`;
+  });
 
   resizeButton.addEventListener("click", async () => {
-    const maxWidth = Number(dialog.querySelector("#resize-width").value);
-    const maxHeight = Number(dialog.querySelector("#resize-height").value);
-    if (!Number.isInteger(maxWidth) || !Number.isInteger(maxHeight) || maxWidth < 1 || maxHeight < 1 || maxWidth > 12000 || maxHeight > 12000) {
+    const width = Number(dialog.querySelector("#resize-width").value);
+    const height = Number(dialog.querySelector("#resize-height").value);
+    const mode = modeSelect.value;
+    const isCropMode = mode === "crop";
+
+    if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1 || width > 12000 || height > 12000) {
       showToast("Enter dimensions between 1 and 12,000 pixels.");
       return;
     }
 
+    if (isCropMode && width * height > 64_000_000) {
+      showToast("Crop output cannot exceed 64 million pixels.");
+      return;
+    }
+
+    const horizontalPosition = Number(cropHorizontal.value) / 100;
+    const verticalPosition = Number(cropVertical.value) / 100;
+    const action = isCropMode ? "Cropping" : "Resizing";
+    setControlsDisabled(true);
     resizeButton.disabled = true;
-    resizeButton.textContent = "Resizing...";
+    resizeButton.textContent = isCropMode ? "Cropping..." : "Resizing...";
     urls.forEach((url) => URL.revokeObjectURL(url));
     urls.length = 0;
-    const resized = [];
+    results.innerHTML = `<div class="converter-empty" aria-live="polite"></div>`;
+    const processed = [];
 
     for (const [index, file] of files.entries()) {
       if (cancelled) return;
-      results.querySelector(".converter-empty").textContent = `Resizing ${index + 1} of ${files.length}: ${file.name}`;
+      results.querySelector(".converter-empty").textContent =
+        `${action} ${index + 1} of ${files.length}: ${file.name}`;
       try {
-        resized.push(await resizeImage(file, maxWidth, maxHeight));
+        processed.push(
+          await resizeImage(file, width, height, mode, horizontalPosition, verticalPosition)
+        );
       } catch (error) {
-        resized.push({ original: file, error: true, message: error.message });
+        processed.push({ original: file, error: true, message: error.message });
       }
     }
     if (cancelled) return;
 
     results.innerHTML = "";
-    resized.forEach((result) => {
+    processed.forEach((result) => {
       const card = document.createElement("article");
       card.className = "converter-result-card";
       if (result.error) {
@@ -838,7 +927,7 @@ function showImageResizer(files) {
         const image = document.createElement("img");
         image.className = "converter-preview";
         image.src = url;
-        image.alt = `Resized ${result.name}`;
+        image.alt = `${isCropMode ? "Cropped" : "Resized"} ${result.name}`;
         const info = document.createElement("div");
         info.className = "converter-result-info";
         const name = document.createElement("strong");
@@ -854,32 +943,89 @@ function showImageResizer(files) {
       }
       results.append(card);
     });
+    setControlsDisabled(false);
     resizeButton.disabled = false;
-    resizeButton.textContent = "Resize again";
+    resizeButton.textContent = isCropMode ? "Crop again" : "Resize again";
   });
+
+  updateResizeMode();
   dialog.showModal();
 }
 
-async function resizeImage(file, maxWidth, maxHeight) {
+async function resizeImage(file, maxWidth, maxHeight, mode = "fit", cropX = 0.5, cropY = 0.5) {
   const bitmap = await createImageBitmap(file);
   try {
-    const scale = Math.min(1, maxWidth / bitmap.width, maxHeight / bitmap.height);
-    const width = Math.max(1, Math.round(bitmap.width * scale));
-    const height = Math.max(1, Math.round(bitmap.height * scale));
+    let width;
+    let height;
+    let sourceX = 0;
+    let sourceY = 0;
+    let sourceWidth = bitmap.width;
+    let sourceHeight = bitmap.height;
+
+    if (mode === "crop") {
+      if (maxWidth * maxHeight > 64_000_000) {
+        throw new Error("Crop output cannot exceed 64 million pixels.");
+      }
+
+      const targetRatio = maxWidth / maxHeight;
+      const sourceRatio = bitmap.width / bitmap.height;
+      if (sourceRatio > targetRatio) {
+        sourceWidth = bitmap.height * targetRatio;
+        sourceX = (bitmap.width - sourceWidth) * cropX;
+      } else if (sourceRatio < targetRatio) {
+        sourceHeight = bitmap.width / targetRatio;
+        sourceY = (bitmap.height - sourceHeight) * cropY;
+      }
+      width = maxWidth;
+      height = maxHeight;
+    } else {
+      const scale = Math.min(1, maxWidth / bitmap.width, maxHeight / bitmap.height);
+      width = Math.max(1, Math.round(bitmap.width * scale));
+      height = Math.max(1, Math.round(bitmap.height * scale));
+    }
+
     const canvas = document.createElement("canvas");
     canvas.width = width;
     canvas.height = height;
     const context = canvas.getContext("2d");
     if (!context) throw new Error("Canvas is not supported.");
+
     if (file.type === "image/jpeg") {
       context.fillStyle = "#fff";
       context.fillRect(0, 0, width, height);
     }
-    context.drawImage(bitmap, 0, 0, width, height);
-    const blob = await new Promise((resolve, reject) => canvas.toBlob((value) => value ? resolve(value) : reject(new Error("Could not resize this image.")), file.type));
+
+    context.drawImage(
+      bitmap,
+      sourceX,
+      sourceY,
+      sourceWidth,
+      sourceHeight,
+      0,
+      0,
+      width,
+      height
+    );
+    const blob = await new Promise((resolve, reject) =>
+      canvas.toBlob(
+        (value) => value
+          ? resolve(value)
+          : reject(new Error("Could not process this image.")),
+        file.type
+      )
+    );
     const extension = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp" }[blob.type];
-    if (!extension || blob.type !== file.type) throw new Error("Your browser could not preserve this image format.");
-    return { blob, width, height, name: `${file.name.replace(/\.[^/.]+$/, "")}-resized.${extension}` };
+    if (!extension || blob.type !== file.type) {
+      throw new Error("Your browser could not preserve this image format.");
+    }
+
+    const suffix = mode === "crop" ? "cropped" : "resized";
+    return {
+      blob,
+      width,
+      height,
+      name: `${file.name.replace(/\.[^/.]+$/, "")}-${suffix}.${extension}`,
+    };
   } finally {
     bitmap.close();
   }
