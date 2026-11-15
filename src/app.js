@@ -21,21 +21,11 @@
 
       <main>
         <section class="hero">
-          <div class="status-badge">
-            <span class="status-dot"></span>
-            FREE FILE UTILITIES
-          </div>
-
-          <h1>Your files.<br /><span>Your control.</span></h1>
-
+          <p class="hero-eyebrow">IMAGE WORKSPACE</p>
+          <h1>Image tools,<br /><span>made simple.</span></h1>
           <p class="hero-description">
-            Convert, compress, and resize your images with simple tools
-            designed for privacy and ease of use.
+            Convert, compress, resize, and crop images right in your browser.
           </p>
-
-          <div class="privacy-badge">
-            ◈ Local processing for supported tools
-          </div>
         </section>
 
         <section class="workspace">
@@ -91,7 +81,7 @@
               <span class="tool-icon">⇄</span>
               <span class="tool-title">Image Converter</span>
               <span class="tool-description">
-                Convert between PNG, JPEG, and WebP.
+                Convert PNG, JPEG, and WebP.
               </span>
               <span class="tool-action">Open tool →</span>
             </button>
@@ -100,7 +90,7 @@
               <span class="tool-icon">⌁</span>
               <span class="tool-title">Image Compressor</span>
               <span class="tool-description">
-                Reduce file size with adjustable quality.
+                Adjust quality and compare file sizes.
               </span>
               <span class="tool-action">Open tool →</span>
             </button>
@@ -109,7 +99,7 @@
               <span class="tool-icon">⤢</span>
               <span class="tool-title">Image Resizer</span>
               <span class="tool-description">
-                Resize images to your desired dimensions.
+                Resize or frame images with visual crop controls.
               </span>
               <span class="tool-action">Open tool →</span>
             </button>
@@ -118,7 +108,7 @@
               <span class="tool-icon">⌕</span>
               <span class="tool-title">File Inspector</span>
               <span class="tool-description">
-                Inspect image dimensions, formats, and sizes.
+                Review image format, dimensions, and file size.
               </span>
               <span class="tool-action">Open tool →</span>
             </button>
@@ -128,21 +118,20 @@
         <section class="privacy-section" id="privacy">
           <div class="privacy-icon">◈</div>
           <div>
-            <h2>Privacy comes first</h2>
+            <h2>Files stay on your device</h2>
             <p>
-              Supported image operations are designed to run directly
-              in your browser. Your selected files are not intentionally
-              uploaded to a FileForge server.
+              Image tools process files directly in your browser. Your selected
+              images are not sent to a FileForge server.
             </p>
           </div>
-          <span class="privacy-label">LOCAL PROCESSING</span>
+          <span class="privacy-label">BROWSER-BASED</span>
         </section>
       </main>
 
       <footer class="footer">
         <a class="footer-brand" href="#">FileForge</a>
-        <p>Free tools. Open source. Your files stay yours.</p>
-        <span>Built for everyone.</span>
+        <p>Simple image utilities for everyday work.</p>
+        <span>Files processed in your browser.</span>
       </footer>
 
       <div class="toast-container" id="toast-container" aria-live="polite"></div>
