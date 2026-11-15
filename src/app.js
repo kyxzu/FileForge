@@ -12,6 +12,7 @@
         <nav class="nav-links">
           <a href="#tools">Tools</a>
           <a href="#privacy">Privacy</a>
+          <a href="https://github.com/kyxzu/FileForge" target="_blank" rel="noopener noreferrer">GitHub ↗</a>
         </nav>
 
         <button class="theme-toggle" id="theme-toggle" aria-label="Switch theme">
@@ -131,7 +132,7 @@
       <footer class="footer">
         <a class="footer-brand" href="#">FileForge</a>
         <p>Simple image utilities for everyday work.</p>
-        <span>Files processed in your browser.</span>
+        <a href="https://github.com/kyxzu/FileForge" target="_blank" rel="noopener noreferrer">GitHub ↗</a>
       </footer>
 
       <div class="toast-container" id="toast-container" aria-live="polite"></div>
@@ -1847,7 +1848,7 @@ function formatBytes(bytes) {
   return `${(bytes / Math.pow(1024, index)).toFixed(2)} ${units[index]}`;
 }
 
-function showToast(message) {
+export function showToast(message) {
   const container = document.querySelector("#toast-container");
   const toast = document.createElement("div");
 
