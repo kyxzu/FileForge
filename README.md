@@ -16,7 +16,7 @@ Convert, compress, resize, and inspect PNG, JPEG, and WebP images with a simple 
 | --- | --- |
 | **Converter** | Convert between PNG, JPEG, and WebP. Adjust quality for JPEG and WebP output. |
 | **Compressor** | Keep the source format or choose PNG, JPEG, or WebP. Compare output sizes and download results. |
-| **Resizer** | Set maximum width and height; images retain their proportions. |
+| **Resizer** | Fit images within maximum dimensions or crop batches to exact target dimensions with adjustable horizontal and vertical positioning. |
 | **Inspector** | View file type, size, last-modified time, dimensions, aspect ratio, and pixel count. |
 
 Select or drag and drop multiple images. The app previews your selection and lets you remove individual files or clear the list. A light and dark theme toggle remembers your choice in browser storage when available.
@@ -25,7 +25,7 @@ Select or drag and drop multiple images. The app previews your selection and let
 
 FileForge is an installable web app. On Android and supported desktop browsers, use the **Install** button when it appears or choose the browser's install option. The app shell is cached for repeat launches and offline use after the first online visit. Image processing remains in the browser.
 
-## Built with
+## Image cropping\n\nIn crop mode, set exact output dimensions and adjust horizontal and vertical crop position for all selected images. The default fit mode keeps the full image and never enlarges it. Crop output can be up to 64 million pixels.\n\n## Built with
 
 - Vanilla JavaScript and browser APIs, including Canvas, the File API, and `createImageBitmap`
 - CSS
