@@ -1,0 +1,58 @@
+name: Bug report
+description: Something in FileForge is not working as expected
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Please do **not** attach private images.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Add three JPEG images
+        2. Open Batch process and choose Image Compression
+        3. ...
+    validations:
+      required: true
+  - type: dropdown
+    id: tool
+    attributes:
+      label: Which part of FileForge?
+      options:
+        - Batch processing
+        - Processing history
+        - Image Converter
+        - Image Compressor
+        - Image Resizer / crop editor
+        - File Inspector
+        - Upload / drag and drop
+        - Theme / layout
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and operating system
+      placeholder: Chrome 130 on Windows 11
+    validations:
+      required: true
+  - type: input
+    id: file-info
+    attributes:
+      label: File type and approximate size (if relevant)
+      placeholder: JPEG, about 4 MB
+  - type: textarea
+    id: console
+    attributes:
+      label: Messages shown in the app or browser console
+      render: text

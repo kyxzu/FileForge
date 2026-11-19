@@ -1,4 +1,5 @@
 import "./styles/styles.css";
+import "./styles/features.css";
 import { initializeApp, showToast } from "./app.js";
 
 initializeApp();

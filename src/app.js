@@ -1,4 +1,17 @@
-﻿export function initializeApp() {
+import { formatBytes } from "./lib/format.js";
+import { validateImageFile, REJECTION_LABELS, MAX_QUEUE_FILES } from "./lib/files.js";
+import { downloadBlob, createZipArchive } from "./lib/download.js";
+import { convertImage, compressImage, resizeImage } from "./lib/imageProcessing.js";
+import { showToast } from "./lib/toast.js";
+import { REPO_URL, GITHUB_ICON } from "./lib/github.js";
+import { openBatchDialog } from "./ui/batchDialog.js";
+import { openHistoryDialog } from "./ui/historyDialog.js";
+import { renderOpenSourceSection, renderFooterLinks } from "./ui/openSource.js";
+import { startToolRun } from "./lib/runRecorder.js";
+
+export { showToast };
+
+export function initializeApp() {
   const app = document.querySelector("#app");
 
   app.innerHTML = `
@@ -9,10 +22,20 @@
           <span>FileForge</span>
         </a>
 
-        <nav class="nav-links">
+        <nav class="nav-links" aria-label="Main">
           <a href="#tools">Tools</a>
+          <button class="nav-link-button" id="open-history" type="button">History</button>
           <a href="#privacy">Privacy</a>
-          <a href="https://github.com/kyxzu/FileForge" target="_blank" rel="noopener noreferrer">GitHub ↗</a>
+          <a
+            class="nav-github"
+            href="${REPO_URL}"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="FileForge on GitHub (opens in a new tab)"
+          >
+            ${GITHUB_ICON}
+            <span>GitHub</span>
+          </a>
         </nav>
 
         <button class="theme-toggle" id="theme-toggle" aria-label="Switch theme">
@@ -56,14 +79,25 @@
             </button>
 
             <span class="supported-formats">PNG · JPEG · WebP</span>
+            <span class="privacy-indicator">◈ Processed locally · files are never uploaded</span>
           </div>
 
           <div class="file-list" id="file-list" hidden>
             <div class="file-list-header">
               <h3>Selected files</h3>
-              <button class="button button-quiet" id="clear-files">
-                Clear all
-              </button>
+              <div class="file-list-actions">
+                <button class="button button-primary" id="open-batch" type="button">
+                  Batch process
+                </button>
+                <button
+                  class="button button-quiet"
+                  id="clear-files"
+                  type="button"
+                  title="Clear the whole queue"
+                >
+                  Clear all
+                </button>
+              </div>
             </div>
             <div id="file-items"></div>
           </div>
@@ -118,21 +152,30 @@
 
         <section class="privacy-section" id="privacy">
           <div class="privacy-icon">◈</div>
-          <div>
+          <div class="privacy-body">
             <h2>Files stay on your device</h2>
             <p>
               Image tools process files directly in your browser. Your selected
               images are not sent to a FileForge server.
             </p>
+            <ul class="privacy-points">
+              <li>Previews, resizing, compression, conversion and inspection all run locally with browser APIs.</li>
+              <li>Processing history (file names, formats, sizes, settings and times) is stored only in this browser. Processed files and image previews are not stored.</li>
+              <li>Deleting history entries, or clearing history, removes those records from this browser.</li>
+              <li>Temporary previews and processing data are released when you close a tool or clear the queue.</li>
+              <li>No accounts, analytics or tracking scripts. The optional GitHub statistics contact GitHub only if you ask for them.</li>
+            </ul>
           </div>
           <span class="privacy-label">BROWSER-BASED</span>
         </section>
+
+        <div id="open-source-root"></div>
       </main>
 
       <footer class="footer">
         <a class="footer-brand" href="#">FileForge</a>
         <p>Simple image utilities for everyday work.</p>
-        <a href="https://github.com/kyxzu/FileForge" target="_blank" rel="noopener noreferrer">GitHub ↗</a>
+        <div class="footer-links" id="footer-links"></div>
       </footer>
 
       <div class="toast-container" id="toast-container" aria-live="polite"></div>
@@ -141,10 +184,20 @@
 
   initializeTheme();
 
-  const getFiles = initializeUpload();
+  const upload = initializeUpload();
 
-  initializeToolCards(getFiles);
+  initializeToolCards(upload.getFiles);
 
+  document
+    .querySelector("#open-batch")
+    .addEventListener("click", () => openBatchDialog(upload));
+
+  document
+    .querySelector("#open-history")
+    .addEventListener("click", () => openHistoryDialog());
+
+  renderOpenSourceSection(document.querySelector("#open-source-root"));
+  renderFooterLinks(document.querySelector("#footer-links"));
 }
 
 // ==========================================
@@ -206,14 +259,10 @@ function initializeUpload() {
   const fileCount = document.querySelector("#file-count");
   const clearButton = document.querySelector("#clear-files");
 
-  const supportedTypes = new Set([
-    "image/png",
-    "image/jpeg",
-    "image/webp",
-  ]);
-
+  // The selected files are also the batch queue.
   let files = [];
   let thumbnailUrls = [];
+  const listeners = new Set();
 
   browseButton.addEventListener("click", () => input.click());
 
@@ -239,43 +288,87 @@ function initializeUpload() {
     addFiles(event.dataTransfer.files);
   });
 
-  clearButton.addEventListener("click", () => {
-    files = [];
-    renderFiles();
-  });
+  clearButton.addEventListener("click", clearFiles);
 
+  function isDuplicate(file) {
+    return files.some(
+      (existing) =>
+        existing.name === file.name &&
+        existing.size === file.size &&
+        existing.lastModified === file.lastModified
+    );
+  }
+
+  function changed() {
+    renderFiles();
+    listeners.forEach((listener) => listener());
+  }
+
+  // Validates every file (size, type, extension, signature, decoding) before
+  // it is allowed into the queue.
   async function addFiles(fileCollection) {
     const incomingFiles = Array.from(fileCollection);
-    let rejected = 0;
+    const rejections = new Map();
+    let duplicates = 0;
+    let overLimit = 0;
 
     for (const file of incomingFiles) {
-      if (!supportedTypes.has(file.type)) {
-        rejected++;
+      if (files.length >= MAX_QUEUE_FILES) {
+        overLimit++;
         continue;
       }
 
-      const duplicate = files.some(
-        (existing) =>
-          existing.name === file.name &&
-          existing.size === file.size &&
-          existing.lastModified === file.lastModified
-      );
-
-      if (duplicate) continue;
-      try {
-        const bitmap = await createImageBitmap(file);
-        bitmap.close();
-        files.push(file);
-      } catch {
-        rejected++;
+      if (isDuplicate(file)) {
+        duplicates++;
+        continue;
       }
+
+      const check = await validateImageFile(file);
+
+      if (!check.ok) {
+        rejections.set(check.code, (rejections.get(check.code) || 0) + 1);
+        continue;
+      }
+
+      // Another add may have finished while this file was being checked.
+      if (isDuplicate(file)) {
+        duplicates++;
+        continue;
+      }
+
+      files.push(file);
     }
 
-    renderFiles();
+    changed();
+
+    const notes = [];
+    const rejected = [...rejections.values()].reduce((total, count) => total + count, 0);
 
     if (rejected > 0) {
-      showToast(`${rejected} unsupported or invalid image(s) skipped.`);
+      const reasons = [...rejections]
+        .map(([code, count]) => `${count} ${REJECTION_LABELS[code]}`)
+        .join("; ");
+      notes.push(`${rejected} file(s) skipped: ${reasons}.`);
     }
+    if (duplicates > 0) notes.push(`${duplicates} duplicate(s) ignored.`);
+    if (overLimit > 0) {
+      notes.push(`The queue is limited to ${MAX_QUEUE_FILES} files; ${overLimit} not added.`);
+    }
+
+    if (notes.length > 0) showToast(notes.join(" "));
+  }
+
+  function removeFile(file) {
+    const index = files.indexOf(file);
+    if (index === -1) return;
+    files.splice(index, 1);
+    changed();
+  }
+
+  function clearFiles() {
+    if (files.length === 0) return;
+    files = [];
+    changed();
   }
 
   function renderFiles() {
@@ -288,7 +381,7 @@ function initializeUpload() {
     fileCount.textContent =
       `${files.length} ${files.length === 1 ? "file" : "files"}`;
 
-    files.forEach((file, index) => {
+    files.forEach((file) => {
       const item = document.createElement("article");
       item.className = "file-item";
 
@@ -319,17 +412,23 @@ function initializeUpload() {
       removeButton.textContent = "×";
       removeButton.setAttribute("aria-label", `Remove ${file.name}`);
 
-      removeButton.addEventListener("click", () => {
-        files.splice(index, 1);
-        renderFiles();
-      });
+      removeButton.addEventListener("click", () => removeFile(file));
 
       item.append(thumbnail, info, removeButton);
       fileItems.appendChild(item);
     });
   }
 
-  return () => [...files];
+  return {
+    getFiles: () => [...files],
+    addFiles,
+    removeFile,
+    clearFiles,
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+  };
 }
 
 // ==========================================
@@ -668,6 +767,10 @@ function showImageConverter(files) {
     const quality = Number(qualitySlider.value) / 100;
 
     const convertedFiles = [];
+    const run = startToolRun("convert", {
+      format,
+      quality: Number(qualitySlider.value),
+    });
 
     for (const [index, file] of files.entries()) {
       if (cancelled) return;
@@ -676,8 +779,10 @@ function showImageConverter(files) {
       try {
         const converted = await convertImage(file, format, quality);
         convertedFiles.push(converted);
+        run.success(file, converted);
       } catch (error) {
         console.error(`Conversion failed for ${file.name}:`, error);
+        run.failure(file, error);
 
         convertedFiles.push({
           original: file,
@@ -695,68 +800,6 @@ function showImageConverter(files) {
   });
 
   dialog.showModal();
-}
-
-async function convertImage(file, format, quality) {
-  const bitmap = await createImageBitmap(file);
-
-  try {
-    const canvas = document.createElement("canvas");
-
-    canvas.width = bitmap.width;
-    canvas.height = bitmap.height;
-
-    const context = canvas.getContext("2d");
-
-    if (!context) {
-      throw new Error("Canvas is not supported.");
-    }
-
-    if (format === "image/jpeg") {
-      context.fillStyle = "#ffffff";
-      context.fillRect(0, 0, canvas.width, canvas.height);
-    }
-
-    context.drawImage(bitmap, 0, 0);
-
-    const blob = await new Promise((resolve, reject) => {
-      canvas.toBlob(
-        (result) => {
-          if (result) {
-            resolve(result);
-          } else {
-            reject(new Error("Could not generate converted image."));
-          }
-        },
-        format,
-        format === "image/png" ? undefined : quality
-      );
-    });
-
-    const extensions = {
-      "image/png": "png",
-      "image/jpeg": "jpg",
-      "image/webp": "webp",
-    };
-
-    const extension = extensions[blob.type];
-
-    if (!extension || blob.type !== format) {
-      throw new Error("Your browser could not generate the requested format.");
-    }
-
-    const originalName = file.name.replace(/\.[^/.]+$/, "");
-
-    return {
-      original: file,
-      blob,
-      name: `${originalName}.${extension}`,
-      width: bitmap.width,
-      height: bitmap.height,
-    };
-  } finally {
-    bitmap.close();
-  }
 }
 
 function showImageResizer(files) {
@@ -833,13 +876,17 @@ function showImageResizer(files) {
     urls.length = 0;
     results.innerHTML = `<div class="converter-empty" aria-live="polite"></div>`;
     const processed = [];
+    const run = startToolRun("resize", { width, height, keepAspect: true });
     for (const [index, file] of files.entries()) {
       if (cancelled) return;
       results.querySelector(".converter-empty").textContent = `Resizing ${index + 1} of ${files.length}: ${file.name}`;
       try {
-        processed.push(await resizeImage(file, width, height));
+        const resized = await resizeImage(file, width, height);
+        processed.push(resized);
+        run.success(file, resized);
       } catch (error) {
         processed.push({ original: file, error: true, message: error.message });
+        run.failure(file, error);
       }
     }
     if (cancelled) return;
@@ -880,33 +927,6 @@ function showImageResizer(files) {
   });
 
   dialog.showModal();
-}
-
-async function resizeImage(file, maxWidth, maxHeight) {
-  const bitmap = await createImageBitmap(file);
-  try {
-    const scale = Math.min(1, maxWidth / bitmap.width, maxHeight / bitmap.height);
-    const width = Math.max(1, Math.round(bitmap.width * scale));
-    const height = Math.max(1, Math.round(bitmap.height * scale));
-    const canvas = document.createElement("canvas");
-    canvas.width = width;
-    canvas.height = height;
-    const context = canvas.getContext("2d");
-    if (!context) throw new Error("Canvas is not supported.");
-    if (file.type === "image/jpeg") {
-      context.fillStyle = "#fff";
-      context.fillRect(0, 0, width, height);
-    }
-    context.drawImage(bitmap, 0, 0, width, height);
-    const blob = await new Promise((resolve, reject) =>
-      canvas.toBlob((value) => value ? resolve(value) : reject(new Error("Could not process this image.")), file.type)
-    );
-    const extension = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp" }[blob.type];
-    if (!extension || blob.type !== file.type) throw new Error("Your browser could not preserve this image format.");
-    return { blob, width, height, name: `${file.name.replace(/\.[^/.]+$/, "")}-resized.${extension}` };
-  } finally {
-    bitmap.close();
-  }
 }
 
 function showImageCropEditor(files) {
@@ -1420,6 +1440,11 @@ function showImageCompressor(files) {
 
     const quality = Number(qualitySlider.value) / 100;
     const outputFormat = formatSelect.value;
+    const run = startToolRun("compress", {
+      format: outputFormat,
+      quality: Number(qualitySlider.value),
+      targetKB: null,
+    });
 
     for (const [index, file] of files.entries()) {
       if (cancelled) return;
@@ -1433,8 +1458,10 @@ function showImageCompressor(files) {
         );
 
         compressedResults.push(compressed);
+        run.success(file, compressed);
       } catch (error) {
         console.error(`Compression failed for ${file.name}:`, error);
+        run.failure(file, error);
 
         compressedResults.push({
           original: file,
@@ -1458,88 +1485,6 @@ function showImageCompressor(files) {
   });
 
   dialog.showModal();
-}
-
-async function compressImage(file, outputFormat, quality) {
-  const bitmap = await createImageBitmap(file);
-
-  try {
-    const canvas = document.createElement("canvas");
-
-    canvas.width = bitmap.width;
-    canvas.height = bitmap.height;
-
-    const context = canvas.getContext("2d");
-
-    if (!context) {
-      throw new Error("Canvas is not supported by your browser.");
-    }
-
-    let targetFormat =
-      outputFormat === "original" ? file.type : outputFormat;
-
-    if (!["image/png", "image/jpeg", "image/webp"].includes(targetFormat)) {
-      throw new Error("Unsupported output format.");
-    }
-
-    // JPEG does not support transparency.
-    // Fill transparent areas with white.
-    if (targetFormat === "image/jpeg") {
-      context.fillStyle = "#ffffff";
-      context.fillRect(0, 0, canvas.width, canvas.height);
-    }
-
-    context.drawImage(bitmap, 0, 0);
-
-    const blob = await new Promise((resolve, reject) => {
-      canvas.toBlob(
-        (result) => {
-          if (result) {
-            resolve(result);
-          } else {
-            reject(new Error("Could not compress this image."));
-          }
-        },
-        targetFormat,
-        targetFormat === "image/png" ? undefined : quality
-      );
-    });
-
-    if (blob.type !== targetFormat) {
-      throw new Error(
-        `Your browser could not produce ${targetFormat}.`
-      );
-    }
-
-    const extensions = {
-      "image/png": "png",
-      "image/jpeg": "jpg",
-      "image/webp": "webp",
-    };
-
-    const extension = extensions[blob.type];
-    const originalName = file.name.replace(/\.[^/.]+$/, "");
-
-    const savedBytes = file.size - blob.size;
-
-    const savedPercentage = file.size > 0
-      ? (savedBytes / file.size) * 100
-      : 0;
-
-    return {
-      original: file,
-      blob,
-      name: `${originalName}-compressed.${extension}`,
-      width: bitmap.width,
-      height: bitmap.height,
-      savedBytes,
-      savedPercentage,
-      format: targetFormat,
-      isPng: targetFormat === "image/png",
-    };
-  } finally {
-    bitmap.close();
-  }
 }
 
 function renderCompressionResults(
@@ -1738,87 +1683,6 @@ function renderCompressionResults(
   }
 }
 
-async function createZipArchive(results) {
-  const encoder = new TextEncoder();
-  const localParts = [];
-  const centralParts = [];
-  let offset = 0;
-
-  for (const result of results) {
-    const name = encoder.encode(result.name);
-    const data = new Uint8Array(await result.blob.arrayBuffer());
-    if (data.byteLength > 0xffffffff || offset > 0xffffffff) {
-      throw new Error("This batch is too large for a standard ZIP archive.");
-    }
-    const checksum = crc32(data);
-    const local = new Uint8Array(30 + name.length);
-    const localView = new DataView(local.buffer);
-    localView.setUint32(0, 0x04034b50, true);
-    localView.setUint16(4, 20, true);
-    localView.setUint16(6, 0x0800, true);
-    localView.setUint32(14, checksum, true);
-    localView.setUint32(18, data.byteLength, true);
-    localView.setUint32(22, data.byteLength, true);
-    localView.setUint16(26, name.length, true);
-    local.set(name, 30);
-    localParts.push(local, data);
-
-    const central = new Uint8Array(46 + name.length);
-    const centralView = new DataView(central.buffer);
-    centralView.setUint32(0, 0x02014b50, true);
-    centralView.setUint16(4, 20, true);
-    centralView.setUint16(6, 20, true);
-    centralView.setUint16(8, 0x0800, true);
-    centralView.setUint32(16, checksum, true);
-    centralView.setUint32(20, data.byteLength, true);
-    centralView.setUint32(24, data.byteLength, true);
-    centralView.setUint16(28, name.length, true);
-    centralView.setUint32(42, offset, true);
-    central.set(name, 46);
-    centralParts.push(central);
-    offset += local.byteLength + data.byteLength;
-  }
-
-  const centralSize = centralParts.reduce((total, part) => total + part.length, 0);
-  const end = new Uint8Array(22);
-  const endView = new DataView(end.buffer);
-  endView.setUint32(0, 0x06054b50, true);
-  endView.setUint16(8, results.length, true);
-  endView.setUint16(10, results.length, true);
-  endView.setUint32(12, centralSize, true);
-  endView.setUint32(16, offset, true);
-  return new Blob([...localParts, ...centralParts, end], { type: "application/zip" });
-}
-
-function crc32(bytes) {
-  let crc = 0xffffffff;
-  for (const byte of bytes) {
-    crc ^= byte;
-    for (let bit = 0; bit < 8; bit++) {
-      crc = (crc >>> 1) ^ (crc & 1 ? 0xedb88320 : 0);
-    }
-  }
-  return (crc ^ 0xffffffff) >>> 0;
-}
-
-// ==========================================
-// DOWNLOAD UTILITY
-// ==========================================
-
-function downloadBlob(blob, filename) {
-  const url = URL.createObjectURL(blob);
-
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-
-  setTimeout(() => URL.revokeObjectURL(url), 1500);
-}
-
 // ==========================================
 // CONVERTER STYLES
 // ==========================================
@@ -1828,36 +1692,3 @@ function downloadBlob(blob, filename) {
 // ==========================================
 // COMPRESSOR STYLES
 // ==========================================
-
-
-
-// ==========================================
-// UTILITIES
-// ==========================================
-
-function formatBytes(bytes) {
-  if (bytes === 0) return "0 Bytes";
-
-  const units = ["Bytes", "KB", "MB", "GB", "TB"];
-
-  const index = Math.min(
-    Math.floor(Math.log(bytes) / Math.log(1024)),
-    units.length - 1
-  );
-
-  return `${(bytes / Math.pow(1024, index)).toFixed(2)} ${units[index]}`;
-}
-
-export function showToast(message) {
-  const container = document.querySelector("#toast-container");
-  const toast = document.createElement("div");
-
-  toast.className = "toast";
-  toast.textContent = message;
-
-  container.appendChild(toast);
-
-  setTimeout(() => toast.remove(), 3500);
-}
-
-
