@@ -91,6 +91,10 @@ Open the local URL printed by Vite.
 - **Production safeguard:** production builds include a Content-Security-Policy that restricts connections to the app's own origin and `https://api.github.com`, so the browser itself refuses other network requests.
 - **File checks:** files are checked for size (50 MB max), type, extension, file signature (the actual contents must match), and image dimensions (100 megapixels max) before they are accepted. Filenames are rendered as text, never as HTML, and downloads use sanitized names.
 
+## Deployment
+
+A GitHub Actions workflow (`.github/workflows/deploy.yml`) runs the tests, builds the app with the `/FileForge/` base path, and publishes it to GitHub Pages on every push to `main`. To enable it once, open **Settings → Pages** in the repository and set **Source** to **GitHub Actions**. The site is then served at `https://kyxzu.github.io/FileForge/`.
+
 ## Project structure
 
 ```
