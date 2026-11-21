@@ -1,6 +1,7 @@
 import "./styles/styles.css";
 import "./styles/features.css";
 import { initializeApp, showToast } from "./app.js";
+import { isNativeApp } from "./lib/platform.js";
 
 initializeApp();
 initializePwa();
@@ -19,7 +20,9 @@ function initializePwa() {
     themeToggle.before(installButton);
 
     let deferredInstallPrompt = null;
+    // The desktop and Android apps are already installed.
     const isInstalled =
+      isNativeApp() ||
       window.matchMedia("(display-mode: standalone)").matches ||
       window.navigator.standalone === true;
 
@@ -51,7 +54,7 @@ function initializePwa() {
     }
   }
 
-  if ("serviceWorker" in navigator && import.meta.env.PROD) {
+  if ("serviceWorker" in navigator && import.meta.env.PROD && !isNativeApp()) {
     const registerServiceWorker = () => {
       navigator.serviceWorker
         .register(`${import.meta.env.BASE_URL}sw.js`, {

@@ -18,12 +18,20 @@ const contentSecurityPolicy = [
   "form-action 'none'",
 ].join("; ");
 
+// The Tauri desktop app enforces its own policy from src-tauri/tauri.conf.json.
+// Two policies would be intersected and the second would block Tauri's
+// internal messaging, so the meta tag is left out of desktop builds.
+const isTauriBuild = Boolean(process.env.TAURI_ENV_PLATFORM);
+
 export default defineConfig({
+  // Tauri's dev window opens this fixed address.
+  server: { port: 5173, strictPort: true },
   plugins: [
     {
       name: "fileforge-content-security-policy",
       apply: "build",
       transformIndexHtml(html) {
+        if (isTauriBuild) return html;
         return html.replace(
           "<head>",
           `<head>\n    <meta http-equiv="Content-Security-Policy" content="${contentSecurityPolicy}" />`

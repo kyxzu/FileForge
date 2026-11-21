@@ -28,3 +28,21 @@ dist-ssr
 .env.*
 test-results
 coverage
+
+# Native app build output
+src-tauri/target
+src-tauri/gen
+android/.gradle
+android/build
+android/app/build
+android/local.properties
+android/captures
+android/.idea
+android/app/src/main/assets/public
+android/app/src/main/assets/capacitor.config.json
+android/app/src/main/assets/capacitor.plugins.json
+android/capacitor-cordova-android-plugins
+*.apk
+*.aab
+*.jks
+*.keystore

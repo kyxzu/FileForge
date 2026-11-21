@@ -49,9 +49,33 @@ These are real screenshots of the application, taken with generated sample image
 | --- | --- |
 | ![Batch processing dialog, light theme](docs/screenshots/batch-light.png) | ![Privacy and open-source sections, light theme](docs/screenshots/open-source-light.png) |
 
-## Install on Android or desktop
+## Apps for desktop and Android
 
-FileForge is an installable web app. On Android and supported desktop browsers, use the **Install** button when it appears or choose the browser's install option. The app shell is cached for repeat launches and offline use after the first online visit. The cache holds the application's own files only, never your images.
+FileForge runs in three ways from the same code:
+
+| Version | Built with | Status |
+| --- | --- | --- |
+| **Web / installable PWA** | Vite | Built and tested in a browser. On supported browsers use the **Install** button; the app shell is cached for offline use after the first visit (never your images). |
+| **Desktop app** (Windows, macOS, Linux) | [Tauri 2](https://tauri.app/) (Rust) | The Linux debug build compiles and starts. The Windows/macOS installers and the native **Save as** dialog have **not been tested yet**. |
+| **Android app** (APK) | [Capacitor](https://capacitorjs.com/) | The project is generated and synced. The APK build and the Android save/share flow have **not been tested on a device yet**. |
+
+In the native apps, results are saved differently: the desktop app opens a native **Save as** dialog, and the Android app writes a temporary file and opens the system share sheet (Save to Files, Drive, and so on). The temporary copy is removed before the next share and after about 10 minutes (Android may clear the app cache sooner). Processing, history, and batch behaviour are the same as on the web.
+
+### Build the apps
+
+Installers are built by GitHub Actions (`.github/workflows/release.yml`): push a tag like `v0.1.0` (or run the workflow manually) and it creates a **draft** release with the desktop installers and a debug-signed `FileForge-android-debug.apk`. Nothing is published until you publish the draft. Builds are unsigned: Windows SmartScreen and macOS Gatekeeper will warn on first launch, and a Play Store build needs your own release keystore.
+
+To build locally:
+
+```bash
+# Desktop: needs Rust (https://rustup.rs) and Tauri's platform prerequisites
+npm run desktop:dev      # run in a window
+npm run desktop:build    # create an installer in src-tauri/target/release/bundle
+
+# Android: needs JDK 21 and the Android SDK (or Android Studio)
+npm run android:sync     # build the web app and copy it into android/
+npm run android:open     # open the project in Android Studio, then Run / Build APK
+```
 
 ## Technology stack
 
@@ -59,7 +83,7 @@ FileForge is an installable web app. On Android and supported desktop browsers, 
 - CSS
 - [Vite](https://vite.dev/) for development and builds
 - Node's built-in test runner (`node --test`) for unit tests
-- No framework and no runtime dependencies
+- No framework. The web app has no runtime dependencies; the Android app adds the Capacitor core, Filesystem, and Share plugins, and the desktop app uses Tauri's dialog and fs plugins
 
 ## Run locally
 
@@ -80,6 +104,8 @@ Open the local URL printed by Vite.
 | `npm test` | Run the unit tests |
 | `npm run build` | Create the production build in `dist/` |
 | `npm run preview` | Serve the production build locally |
+| `npm run desktop:dev` / `desktop:build` | Run or package the desktop app (Tauri) |
+| `npm run android:sync` / `android:open` | Sync or open the Android project (Capacitor) |
 
 ## Privacy
 
@@ -88,6 +114,7 @@ Open the local URL printed by Vite.
 - **Temporary data:** image previews and processing data are held in memory and released (object URLs revoked, decoded bitmaps closed, canvases emptied) when you close a tool, clear the queue, or cancel.
 - **No tracking:** no accounts, analytics, telemetry, or tracking scripts.
 - **Network use:** the only optional request is the GitHub statistics button, which calls the public GitHub API (`api.github.com`) and sends no files or personal data. Nothing is requested until you click it.
+- **Native apps:** the desktop and Android apps run the same local code. Files are written only where you choose (the Save dialog, or the share sheet on Android). The Android app keeps the `INTERNET` permission solely for the optional GitHub statistics button; no other network requests are made. The desktop app's security policy likewise allows only its own content and `https://api.github.com`.
 - **Production safeguard:** production builds include a Content-Security-Policy that restricts connections to the app's own origin and `https://api.github.com`, so the browser itself refuses other network requests.
 - **File checks:** files are checked for size (50 MB max), type, extension, file signature (the actual contents must match), and image dimensions (100 megapixels max) before they are accepted. Filenames are rendered as text, never as HTML, and downloads use sanitized names.
 
@@ -102,6 +129,9 @@ FileForge/
 ├── index.html                # Page shell
 ├── vite.config.js            # Vite config (adds the CSP to production builds)
 ├── public/                   # Icons, web manifest, service worker
+├── src-tauri/                # Desktop app (Tauri / Rust)
+├── android/                  # Android app (Capacitor)
+├── capacitor.config.json     # Capacitor settings
 ├── docs/screenshots/         # Screenshots used in this README
 ├── src/
 │   ├── main.js               # Entry point, install button, service worker
@@ -112,7 +142,8 @@ FileForge/
 │   │   ├── batchQueue.js       # Queue with controlled concurrency and cancel
 │   │   ├── history.js          # IndexedDB history and statistics
 │   │   ├── files.js            # Validation, safe filenames
-│   │   ├── download.js         # Downloads and ZIP creation
+│   │   ├── download.js         # Downloads (browser, desktop, Android) and ZIP creation
+│   │   ├── platform.js         # Detects web / desktop / Android
 │   │   ├── github.js           # Repository links and optional stats
 │   │   └── ...                 # format, dom, toast, runRecorder
 │   ├── ui/                   # Dialogs: batch, history, confirm, open-source

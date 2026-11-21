@@ -31,6 +31,12 @@ npm run build    # production build (also adds the Content-Security-Policy)
 npm run preview  # serve the production build
 ```
 
+## Native apps (optional)
+
+- **Desktop (Tauri):** install Rust, then `npm run desktop:dev`. Keep `src-tauri/capabilities/default.json` minimal; add a permission only when a feature needs it, and explain why in the pull request.
+- **Android (Capacitor):** JDK 21 and the Android SDK are needed. `npm run android:sync`, then `npm run android:open`. Re-run sync after changing web code.
+- Native-only code is loaded through `src/lib/platform.js` checks so the web build never runs it. Test the web version first; mention which native platforms you actually tested.
+
 ## Where things live
 
 - `src/lib/`: logic without UI (image processing, queue, history, validation, ZIP). Keep this free of page markup so it can be tested in Node.

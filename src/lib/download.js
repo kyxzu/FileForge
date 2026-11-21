@@ -1,6 +1,10 @@
 // Downloads and ZIP creation. Everything happens in the browser.
 
-export function downloadBlob(blob, filename) {
+import { getPlatform } from "./platform.js";
+import { showToast } from "./toast.js";
+
+// Browser download: an <a download> link pointing at an object URL.
+function downloadInBrowser(blob, filename) {
   const url = URL.createObjectURL(blob);
 
   const link = document.createElement("a");
@@ -12,6 +16,91 @@ export function downloadBlob(blob, filename) {
   link.remove();
 
   setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+
+async function blobToBase64(blob) {
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  let binary = "";
+  const chunk = 0x8000;
+  for (let index = 0; index < bytes.length; index += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + chunk));
+  }
+  return btoa(binary);
+}
+
+// Desktop app (Tauri): native "Save as" dialog, then write the file.
+// Returns true when saved, false when the person cancelled the dialog.
+export async function saveWithDesktopDialog(blob, filename, tauri = globalThis.__TAURI__) {
+  if (!tauri?.dialog?.save || !tauri?.fs?.writeFile) {
+    throw new Error("Saving files is not available in this app build.");
+  }
+
+  const extension = /\.([^.]+)$/.exec(filename)?.[1];
+  const path = await tauri.dialog.save({
+    defaultPath: filename,
+    filters: extension ? [{ name: extension.toUpperCase(), extensions: [extension] }] : undefined,
+  });
+
+  if (!path) return false;
+
+  await tauri.fs.writeFile(path, new Uint8Array(await blob.arrayBuffer()));
+  return true;
+}
+
+// Android app (Capacitor): write a temporary file, then open the system share
+// sheet (Save to Files, Drive, Messages...).
+//
+// Share.share() resolves when the sheet opens, not when the receiving app has
+// finished reading the file, so the temporary copy is NOT deleted right away.
+// It is removed before the next share and after TEMP_FILE_LIFETIME_MS
+// (Android may also clear the app cache sooner).
+// `plugins` can be passed in for testing; otherwise the plugins are loaded
+// only here, so the web build never runs them.
+export const TEMP_FILE_LIFETIME_MS = 10 * 60 * 1000;
+const SHARE_DIRECTORY = "fileforge-share";
+
+export async function saveWithAndroidShare(blob, filename, plugins = null) {
+  const { Filesystem, Directory, Share } = plugins || {
+    ...(await import("@capacitor/filesystem")),
+    ...(await import("@capacitor/share")),
+  };
+
+  const removeSharedFiles = () =>
+    Filesystem.rmdir({ path: SHARE_DIRECTORY, directory: Directory.Cache, recursive: true }).catch(() => {});
+
+  await removeSharedFiles(); // clear copies left by earlier shares
+
+  const written = await Filesystem.writeFile({
+    path: `${SHARE_DIRECTORY}/${filename}`,
+    data: await blobToBase64(blob),
+    directory: Directory.Cache,
+    recursive: true,
+  });
+  const cleanupTimer = setTimeout(removeSharedFiles, TEMP_FILE_LIFETIME_MS);
+  cleanupTimer?.unref?.(); // Node only (tests); browsers return a number
+
+  try {
+    await Share.share({ title: filename, dialogTitle: `Save ${filename}`, url: written.uri });
+  } catch (error) {
+    // Closing the share sheet rejects on some Android versions. That is not an error.
+    if (!/cancel/i.test(String(error?.message || error))) throw error;
+  }
+  return true;
+}
+
+// Saves a file the right way for the platform. Never throws: failures are
+// reported with a toast and the returned promise resolves to false.
+export async function downloadBlob(blob, filename, platform = getPlatform()) {
+  try {
+    if (platform === "desktop") return await saveWithDesktopDialog(blob, filename);
+    if (platform === "android") return await saveWithAndroidShare(blob, filename);
+    downloadInBrowser(blob, filename);
+    return true;
+  } catch (error) {
+    console.error(`Could not save ${filename}:`, error);
+    showToast(`Could not save ${filename}. ${error?.message || ""}`.trim());
+    return false;
+  }
 }
 
 // CRC-32 lookup table, built once.
