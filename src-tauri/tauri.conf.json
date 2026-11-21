@@ -28,7 +28,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "category": "Graphics",
+    "category": "GraphicsAndDesign",
     "shortDescription": "Private image tools that run on your device",
     "longDescription": "Convert, compress, resize, crop and inspect PNG, JPEG and WebP images, one at a time or in batches. Files are processed on your device and never uploaded.",
     "icon": [
