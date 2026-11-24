@@ -7,7 +7,7 @@ import { OPERATIONS, operationLabel, describeSettings } from "../lib/operations.
 import {
   getAllRecords, getStorageMode, deleteRecord, clearHistory, computeStats,
 } from "../lib/history.js";
-import { showToast } from "../lib/toast.js";
+import { showToast, notify } from "../lib/toast.js";
 import { confirmDialog } from "./confirmDialog.js";
 
 const PAGE_SIZE = 100;
@@ -316,7 +316,7 @@ export function openHistoryDialog() {
       if (state.selectedId === id) state.selectedId = null;
       render();
     } catch {
-      showToast("That history entry could not be deleted.");
+      notify({ type: "error", title: "Not deleted", message: "That history entry could not be deleted." });
     }
   }
 
@@ -337,9 +337,9 @@ export function openHistoryDialog() {
       state.records = [];
       state.selectedId = null;
       render();
-      showToast("Processing history cleared.");
+      notify({ type: "success", title: "History cleared", message: "Processing history cleared." });
     } catch {
-      showToast("History could not be cleared.");
+      notify({ type: "error", title: "Not cleared", message: "History could not be cleared." });
     }
   }
 

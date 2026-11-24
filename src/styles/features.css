@@ -328,22 +328,3 @@
   .batch-status.status-processing::before { animation: none; }
   .batch-progress-fill { transition: none; }
 }
-
-/* ---------- small screens: keep the navbar on one line ---------- */
-
-@media (max-width: 600px) {
-  .nav-github span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-  .nav-links { gap: 12px; }
-  .navbar .install-button { padding-right: 11px; padding-left: 11px; }
-}
-@media (max-width: 400px) {
-  .nav-links { gap: 9px; font-size: 11.5px; }
-  .brand span:last-child { font-size: 16px; }
-}
-
-/* The original stylesheet hides the Privacy link on phones with
-   ".nav-links a:nth-child(2)". The History button now sits in that slot,
-   so the same behaviour is kept explicitly. */
-@media (max-width: 550px) {
-  .nav-links a[href="#privacy"] { display: none; }
-}

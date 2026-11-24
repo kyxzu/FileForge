@@ -2,12 +2,17 @@ import { formatBytes } from "./lib/format.js";
 import { validateImageFile, REJECTION_LABELS, MAX_QUEUE_FILES } from "./lib/files.js";
 import { downloadBlob, createZipArchive } from "./lib/download.js";
 import { convertImage, compressImage, resizeImage } from "./lib/imageProcessing.js";
-import { showToast } from "./lib/toast.js";
+import { showToast, notify } from "./lib/toast.js";
+import { getSettings } from "./lib/settings.js";
 import { REPO_URL, GITHUB_ICON } from "./lib/github.js";
 import { openBatchDialog } from "./ui/batchDialog.js";
 import { openHistoryDialog } from "./ui/historyDialog.js";
+import { openSettingsDialog } from "./ui/settingsDialog.js";
+import { createCommandPalette, shortcutLabel } from "./ui/commandPalette.js";
 import { renderOpenSourceSection, renderFooterLinks } from "./ui/openSource.js";
 import { startToolRun } from "./lib/runRecorder.js";
+import { initializeNavigation } from "./ui/navigation.js";
+import { createFileListView } from "./ui/fileList.js";
 
 export { showToast };
 
@@ -17,15 +22,16 @@ export function initializeApp() {
   app.innerHTML = `
     <div class="app-shell">
       <header class="navbar">
-        <a class="brand" href="#">
-          <span class="brand-icon">F</span>
+        <a class="brand" href="#" aria-label="FileForge home">
+          <span class="brand-icon" aria-hidden="true">F</span>
           <span>FileForge</span>
         </a>
 
         <nav class="nav-links" aria-label="Main">
-          <a href="#tools">Tools</a>
+          <a href="#tools" data-nav-section="tools">Tools</a>
           <button class="nav-link-button" id="open-history" type="button">History</button>
-          <a href="#privacy">Privacy</a>
+          <button class="nav-link-button" id="open-settings" type="button">Settings</button>
+          <a href="#privacy" data-nav-section="privacy">Privacy</a>
           <a
             class="nav-github"
             href="${REPO_URL}"
@@ -38,10 +44,49 @@ export function initializeApp() {
           </a>
         </nav>
 
-        <button class="theme-toggle" id="theme-toggle" aria-label="Switch theme">
-          ☼
-        </button>
+        <div class="navbar-actions">
+          <button class="palette-launcher" id="open-palette" type="button" aria-label="Search commands" aria-keyshortcuts="Control+K Meta+K">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3"/></svg>
+            <span class="palette-launcher-text">Search</span>
+            <kbd class="palette-launcher-key" id="palette-shortcut" aria-hidden="true"></kbd>
+          </button>
+          <button class="theme-toggle" id="theme-toggle" aria-label="Switch theme">
+            ☼
+          </button>
+          <button
+            class="nav-menu-button"
+            id="nav-menu-button"
+            type="button"
+            aria-label="Open menu"
+            aria-expanded="false"
+            aria-controls="nav-drawer"
+          >
+            <span class="nav-menu-bars" aria-hidden="true"></span>
+          </button>
+        </div>
       </header>
+
+      <div class="nav-overlay" id="nav-overlay" hidden></div>
+      <aside class="nav-drawer" id="nav-drawer" aria-label="Menu" inert>
+        <div class="nav-drawer-header">
+          <span class="nav-drawer-title">Menu</span>
+          <button class="nav-drawer-close" id="nav-drawer-close" type="button" aria-label="Close menu">
+            <span aria-hidden="true">×</span>
+          </button>
+        </div>
+        <nav class="nav-drawer-links" aria-label="Menu links">
+          <a href="#tools" data-nav-section="tools">Tools</a>
+          <button type="button" data-nav-action="palette">Search commands</button>
+          <button type="button" data-nav-action="history">History</button>
+          <button type="button" data-nav-action="settings">Settings</button>
+          <a href="#privacy" data-nav-section="privacy">Privacy</a>
+          <a href="${REPO_URL}" target="_blank" rel="noopener noreferrer">
+            ${GITHUB_ICON}
+            <span>GitHub<span class="visually-hidden"> (opens in a new tab)</span></span>
+          </a>
+          <button type="button" data-nav-action="install" hidden>Install app</button>
+        </nav>
+      </aside>
 
       <main>
         <section class="hero">
@@ -86,6 +131,14 @@ export function initializeApp() {
             <div class="file-list-header">
               <h3>Selected files</h3>
               <div class="file-list-actions">
+                <div class="view-toggle" id="view-toggle" role="group" aria-label="File view">
+                  <button type="button" data-view="list" aria-pressed="true" aria-label="List view" title="List view">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M5.5 4h8M5.5 8h8M5.5 12h8M2.5 4h.01M2.5 8h.01M2.5 12h.01"/></svg>
+                  </button>
+                  <button type="button" data-view="grid" aria-pressed="false" aria-label="Grid view" title="Grid view">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="2.5" width="4.5" height="4.5" rx="1"/><rect x="9" y="2.5" width="4.5" height="4.5" rx="1"/><rect x="2.5" y="9" width="4.5" height="4.5" rx="1"/><rect x="9" y="9" width="4.5" height="4.5" rx="1"/></svg>
+                  </button>
+                </div>
                 <button class="button button-primary" id="open-batch" type="button">
                   Batch process
                 </button>
@@ -182,11 +235,12 @@ export function initializeApp() {
     </div>
   `;
 
-  initializeTheme();
+  const theme = initializeTheme();
+  initializeNavigation();
 
   const upload = initializeUpload();
 
-  initializeToolCards(upload.getFiles);
+  initializeToolCards(upload.getFiles, upload.subscribe);
 
   document
     .querySelector("#open-batch")
@@ -196,8 +250,51 @@ export function initializeApp() {
     .querySelector("#open-history")
     .addEventListener("click", () => openHistoryDialog());
 
+  document
+    .querySelector("#open-settings")
+    .addEventListener("click", () => openSettingsDialog({ theme }));
+
+  initializeCommandPalette({ theme, upload });
+
   renderOpenSourceSection(document.querySelector("#open-source-root"));
   renderFooterLinks(document.querySelector("#footer-links"));
+}
+
+// ==========================================
+// COMMAND PALETTE
+// ==========================================
+
+// Each command presses the same button or card a person would click, so the
+// palette never duplicates what the tools do.
+function initializeCommandPalette({ theme, upload }) {
+  const click = (selector) => () => document.querySelector(selector)?.click();
+  const needsImages = () => (upload.getFiles().length === 0 ? "Add images first" : "");
+
+  const palette = createCommandPalette({
+    getCommands: () => [
+      { id: "add", label: "Add images", hint: "Choose files", keywords: "upload select browse open files", run: click("#browse-button") },
+      { id: "converter", label: "Open Image Converter", hint: needsImages(), keywords: "convert format png jpeg webp tool", run: click('[data-tool="Image Converter"]') },
+      { id: "compressor", label: "Open Image Compressor", hint: needsImages(), keywords: "compress smaller reduce size tool", run: click('[data-tool="Image Compressor"]') },
+      { id: "resizer", label: "Open Image Resizer", hint: needsImages(), keywords: "resize crop scale dimensions tool", run: click('[data-tool="Image Resizer"]') },
+      { id: "inspector", label: "Open File Inspector", hint: needsImages(), keywords: "inspect details information metadata tool", run: click('[data-tool="File Inspector"]') },
+      { id: "batch", label: "Batch process images", hint: needsImages(), keywords: "batch many all queue", run: click("#open-batch") },
+      { id: "history", label: "Open Processing History", keywords: "past records previous log", run: click("#open-history") },
+      { id: "settings", label: "Open Settings", keywords: "preferences options defaults", run: click("#open-settings") },
+      { id: "theme", label: "Toggle theme", hint: theme.get() === "dark" ? "Switch to light" : "Switch to dark", keywords: "dark light appearance mode", run: () => theme.toggle() },
+      { id: "tools", label: "Go to Tools", keywords: "section", run: click('a[href="#tools"]') },
+      { id: "privacy", label: "Go to Privacy information", keywords: "section local data", run: click('a[href="#privacy"]') },
+      {
+        id: "github",
+        label: "Open GitHub repository",
+        hint: "Opens in a new tab",
+        keywords: "source code open source repo",
+        run: () => window.open(REPO_URL, "_blank", "noopener,noreferrer"),
+      },
+    ],
+  });
+
+  document.querySelector("#palette-shortcut").textContent = shortcutLabel();
+  document.querySelector("#open-palette").addEventListener("click", () => palette.open());
 }
 
 // ==========================================
@@ -233,17 +330,32 @@ function initializeTheme() {
 
   setTheme(initialTheme);
 
-  toggle.addEventListener("click", () => {
-    const nextTheme =
-      document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+  const controller = {
+    get: () => document.documentElement.dataset.theme,
+    set(theme) {
+      setTheme(theme);
+      try {
+        localStorage.setItem("fileforge-theme", theme);
+      } catch {
+        // Keep the selected theme for this session if storage is unavailable.
+      }
+    },
+    toggle() {
+      controller.set(controller.get() === "dark" ? "light" : "dark");
+    },
+    // Forget the saved choice and follow the system preference again.
+    reset() {
+      try {
+        localStorage.removeItem("fileforge-theme");
+      } catch {
+        // Nothing saved to remove.
+      }
+      setTheme(window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+    },
+  };
 
-    setTheme(nextTheme);
-    try {
-      localStorage.setItem("fileforge-theme", nextTheme);
-    } catch {
-      // Keep the selected theme for this session if storage is unavailable.
-    }
-  });
+  toggle.addEventListener("click", () => controller.toggle());
+  return controller;
 }
 
 // ==========================================
@@ -261,7 +373,6 @@ function initializeUpload() {
 
   // The selected files are also the batch queue.
   let files = [];
-  let thumbnailUrls = [];
   const listeners = new Set();
 
   browseButton.addEventListener("click", () => input.click());
@@ -309,6 +420,7 @@ function initializeUpload() {
   async function addFiles(fileCollection) {
     const incomingFiles = Array.from(fileCollection);
     const rejections = new Map();
+    const countBefore = files.length;
     let duplicates = 0;
     let overLimit = 0;
 
@@ -355,7 +467,11 @@ function initializeUpload() {
       notes.push(`The queue is limited to ${MAX_QUEUE_FILES} files; ${overLimit} not added.`);
     }
 
-    if (notes.length > 0) showToast(notes.join(" "));
+    const added = files.length - countBefore;
+    if (added > 0) {
+      notify({ type: "success", title: "Images added", message: `${added} ${added === 1 ? "image is" : "images are"} ready.` });
+    }
+    if (notes.length > 0) notify({ type: "warning", title: "Some files were not added", message: notes.join(" ") });
   }
 
   function removeFile(file) {
@@ -371,52 +487,20 @@ function initializeUpload() {
     changed();
   }
 
-  function renderFiles() {
-    thumbnailUrls.forEach((url) => URL.revokeObjectURL(url));
-    thumbnailUrls = [];
+  const fileListView = createFileListView({
+    container: fileItems,
+    toggle: document.querySelector("#view-toggle"),
+    onRemove: removeFile,
+    fallbackFocus: browseButton,
+  });
 
-    fileItems.innerHTML = "";
+  function renderFiles() {
     fileList.hidden = files.length === 0;
 
     fileCount.textContent =
       `${files.length} ${files.length === 1 ? "file" : "files"}`;
 
-    files.forEach((file) => {
-      const item = document.createElement("article");
-      item.className = "file-item";
-
-      const thumbnail = document.createElement("img");
-      thumbnail.className = "file-thumbnail";
-      thumbnail.alt = "";
-
-      const thumbnailUrl = URL.createObjectURL(file);
-      thumbnailUrls.push(thumbnailUrl);
-      thumbnail.src = thumbnailUrl;
-
-      const info = document.createElement("div");
-      info.className = "file-info";
-
-      const name = document.createElement("span");
-      name.className = "file-name";
-      name.textContent = file.name;
-
-      const details = document.createElement("span");
-      details.className = "file-details";
-      details.textContent = `${formatBytes(file.size)} · ${file.type}`;
-
-      info.append(name, details);
-
-      const removeButton = document.createElement("button");
-      removeButton.className = "remove-file";
-      removeButton.type = "button";
-      removeButton.textContent = "×";
-      removeButton.setAttribute("aria-label", `Remove ${file.name}`);
-
-      removeButton.addEventListener("click", () => removeFile(file));
-
-      item.append(thumbnail, info, removeButton);
-      fileItems.appendChild(item);
-    });
+    fileListView.render(files);
   }
 
   return {
@@ -435,8 +519,21 @@ function initializeUpload() {
 // TOOL CARDS
 // ==========================================
 
-function initializeToolCards(getFiles) {
-  document.querySelectorAll("[data-tool]").forEach((card) => {
+function initializeToolCards(getFiles, subscribe) {
+  const cards = [...document.querySelectorAll("[data-tool]")];
+
+  // Status line on each card: tools need at least one image.
+  function updateCardStates() {
+    const ready = getFiles().length > 0;
+    cards.forEach((card) => {
+      card.dataset.state = ready ? "ready" : "idle";
+      card.querySelector(".tool-action").textContent = ready ? "Open tool →" : "Add images first";
+    });
+  }
+  subscribe(updateCardStates);
+  updateCardStates();
+
+  cards.forEach((card) => {
     card.addEventListener("click", () => {
       const tool = card.dataset.tool;
       const files = getFiles();
@@ -750,6 +847,17 @@ function showImageConverter(files) {
     qualityValue.textContent = `${qualitySlider.value}%`;
   });
 
+  // Saved preferences (Settings) replace this tool's own starting values.
+  const prefs = getSettings();
+  if (prefs.outputFormat) {
+    formatSelect.value = prefs.outputFormat;
+    formatSelect.dispatchEvent(new Event("change"));
+  }
+  if (prefs.quality !== null) {
+    qualitySlider.value = prefs.quality;
+    qualitySlider.dispatchEvent(new Event("input"));
+  }
+
   convertButton.addEventListener("click", async () => {
     convertButton.disabled = true;
     convertButton.textContent = "Converting...";
@@ -843,6 +951,8 @@ function showImageResizer(files) {
   const results = dialog.querySelector("#resize-results");
   const widthInput = dialog.querySelector("#resize-width");
   const heightInput = dialog.querySelector("#resize-height");
+  widthInput.value = getSettings().resizeWidth;
+  heightInput.value = getSettings().resizeHeight;
   const urls = [];
   let cancelled = false;
 
@@ -1157,7 +1267,7 @@ function showImageCropEditor(files) {
       if(blob.type!==type)throw new Error("Your browser could not create the selected format.");
       const extension={"image/jpeg":"jpg","image/png":"png","image/webp":"webp"}[type];
       downloadBlob(blob,`${state.file.name.replace(/\.[^/.]+$/,"")}-crop.${extension}`);
-    }catch(error){showToast(error.message);}
+    }catch(error){notify({ type: "error", title: "Crop failed", message: error.message });}
     finally{downloadButton.disabled=false;downloadButton.textContent="Download crop";}
   });
   formatSelect.value="image/jpeg";
@@ -1378,6 +1488,17 @@ function showImageCompressor(files) {
   });
 
   formatSelect.addEventListener("change", updateCompressionSettings);
+
+  // Saved preferences (Settings) replace this tool's own starting values.
+  const prefs = getSettings();
+  if (prefs.outputFormat) {
+    formatSelect.value = prefs.outputFormat;
+    formatSelect.dispatchEvent(new Event("change"));
+  }
+  if (prefs.quality !== null) {
+    qualitySlider.value = prefs.quality;
+    qualitySlider.dispatchEvent(new Event("input"));
+  }
 
   function updateCompressionSettings() {
     const selectedFormat = formatSelect.value;
@@ -1672,7 +1793,7 @@ function renderCompressionResults(
         const archive = await createZipArchive(successfulResults);
         downloadBlob(archive, "fileforge-compressed.zip");
       } catch (error) {
-        showToast(error.message || "Could not prepare the ZIP archive.");
+        notify({ type: "error", title: "ZIP failed", message: error.message || "Could not prepare the ZIP archive." });
       } finally {
         downloadAllButton.disabled = false;
         downloadAllButton.textContent = `Download all (${successfulResults.length})`;

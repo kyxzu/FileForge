@@ -351,12 +351,6 @@ a {
   transition: 0.2s;
 }
 
-.tool-card:hover {
-  transform: translateY(-4px);
-  border-color: var(--accent);
-  background: var(--surface-hover);
-}
-
 .tool-icon {
   width: 40px;
   height: 40px;
@@ -676,19 +670,6 @@ a {
 @media (max-width: 550px) {
   .app-shell {
     width: min(100% - 28px, 1100px);
-  }
-
-  .navbar {
-    height: 70px;
-  }
-
-  .nav-links {
-    gap: 14px;
-    font-size: 12px;
-  }
-
-  .nav-links a:nth-child(2) {
-    display: none;
   }
 
   .hero {
@@ -1370,37 +1351,6 @@ button:disabled {
 }
 
 @media (max-width: 550px) {
-  .navbar {
-    gap: 8px;
-  }
-
-  .brand {
-    flex-shrink: 0;
-    gap: 8px;
-    font-size: 17px;
-  }
-
-  .brand-icon {
-    width: 32px;
-    height: 32px;
-  }
-
-  .nav-links {
-    gap: 10px;
-  }
-
-  .install-button {
-    min-height: 42px;
-    padding: 0 10px;
-    font-size: 12px;
-  }
-
-  .theme-toggle {
-    flex: 0 0 42px;
-    width: 42px;
-    height: 42px;
-  }
-
   .section-heading {
     align-items: flex-start;
     gap: 12px;
@@ -1557,7 +1507,7 @@ body { line-height: 1.55; }
 .file-item { padding: 10px; border-radius: 10px; background: var(--surface); }
 .tool-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .tool-card { min-height: 185px; padding: 17px; border-radius: 11px; background: var(--surface); transition: border-color .18s ease, background .18s ease; }
-.tool-card:hover { transform: none; border-color: var(--muted); background: var(--surface-hover); }
+@media (hover: hover) { .tool-card:hover { border-color: var(--muted); background: var(--surface-hover); } }
 .tool-icon { width: 34px; height: 34px; margin-bottom: 15px; border-radius: 9px; font-size: 18px; }
 .tool-title { font-size: 13px; font-weight: 620; }
 .tool-description { margin-top: 7px; font-size: 11px; line-height: 1.55; }
@@ -1588,8 +1538,6 @@ body { line-height: 1.55; }
 }
 @media (max-width: 600px) {
   .app-shell { width: min(100% - 32px, 1080px); }
-  .navbar { height: 64px; }
-  .nav-links { gap: 14px; font-size: 12px; }
   .hero { padding: 54px 0 40px; }
   .hero h1 { font-size: clamp(39px, 11vw, 52px); letter-spacing: -2.2px; }
   .hero-description { font-size: 14px; }

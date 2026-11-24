@@ -4,6 +4,7 @@
 //
 // If IndexedDB is unavailable (some private modes), records are kept in memory
 // for the current tab only; getStorageMode() reports which one is in use.
+import { getSettings } from "./settings.js";
 
 const DB_NAME = "fileforge";
 const DB_VERSION = 1;
@@ -180,6 +181,7 @@ export function createHistoryRecord({
 
 // Saves records without ever interrupting the user's processing.
 export async function saveHistoryRecords(records) {
+  if (!getSettings().saveHistory) return; // turned off in Settings
   try {
     await addRecords(records);
   } catch (error) {

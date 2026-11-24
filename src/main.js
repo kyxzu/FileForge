@@ -1,5 +1,11 @@
 import "./styles/styles.css";
 import "./styles/features.css";
+import "./styles/nav.css";
+import "./styles/components.css";
+import "./styles/dialogs.css";
+import "./styles/notifications.css";
+import "./styles/settings.css";
+import "./styles/palette.css";
 import { initializeApp, showToast } from "./app.js";
 import { isNativeApp } from "./lib/platform.js";
 

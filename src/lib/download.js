@@ -1,7 +1,7 @@
 // Downloads and ZIP creation. Everything happens in the browser.
 
 import { getPlatform } from "./platform.js";
-import { showToast } from "./toast.js";
+import { notify } from "./toast.js";
 
 // Browser download: an <a download> link pointing at an object URL.
 function downloadInBrowser(blob, filename) {
@@ -92,13 +92,21 @@ export async function saveWithAndroidShare(blob, filename, plugins = null) {
 // reported with a toast and the returned promise resolves to false.
 export async function downloadBlob(blob, filename, platform = getPlatform()) {
   try {
-    if (platform === "desktop") return await saveWithDesktopDialog(blob, filename);
-    if (platform === "android") return await saveWithAndroidShare(blob, filename);
+    if (platform === "desktop") {
+      const saved = await saveWithDesktopDialog(blob, filename);
+      if (saved) notify({ type: "success", title: "File saved", message: filename });
+      return saved;
+    }
+    if (platform === "android") {
+      await saveWithAndroidShare(blob, filename);
+      return true;
+    }
     downloadInBrowser(blob, filename);
+    notify({ type: "success", title: "Download started", message: filename });
     return true;
   } catch (error) {
     console.error(`Could not save ${filename}:`, error);
-    showToast(`Could not save ${filename}. ${error?.message || ""}`.trim());
+    notify({ type: "error", title: "Could not save file", message: `${filename}. ${error?.message || ""}`.trim() });
     return false;
   }
 }

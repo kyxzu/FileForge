@@ -1,0 +1,119 @@
+/* ==========================================================
+   Components: tool cards, file list (list/grid views).
+   Loaded after the other stylesheets; uses the shared tokens.
+   ========================================================== */
+
+/* ---------- tool cards ---------- */
+
+.tool-card {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  transition: border-color 0.18s ease, background 0.18s ease, transform 0.12s ease;
+}
+.tool-card:active { transform: scale(0.98); background: var(--surface-hover); }
+
+/* Status line: a dot plus text. Muted until there are images to work on. */
+.tool-card .tool-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: auto;
+}
+.tool-card .tool-action::before {
+  content: "";
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+.tool-card[data-state="ready"] .tool-action::before { background: var(--accent); }
+.tool-card[data-state="idle"] .tool-action { color: var(--muted); }
+
+/* One column only on the very narrowest phones. */
+@media (max-width: 339px) {
+  .tool-grid { grid-template-columns: minmax(0, 1fr); }
+  .tool-card { min-height: 0; }
+}
+
+/* ---------- file list ---------- */
+
+.file-list-header { flex-wrap: wrap; gap: 10px 12px; }
+.file-list-actions { flex-wrap: wrap; }
+
+.view-toggle {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface);
+}
+.view-toggle button {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 32px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--muted);
+  transition: background 0.16s ease, color 0.16s ease;
+}
+.view-toggle button:hover { color: var(--text); }
+.view-toggle button[aria-pressed="true"] { background: var(--surface-hover); color: var(--text); }
+
+.file-item { min-width: 0; }
+.file-item:focus-visible { outline-offset: 2px; }
+.file-details { display: flex; flex-wrap: wrap; gap: 0 10px; }
+.file-added::before { content: "·"; margin-right: 10px; }
+.file-name { max-width: 100%; }
+.remove-file { flex: 0 0 auto; }
+
+/* List view is the base style from styles.css. */
+
+/* Grid view: thumbnails first. */
+#file-items[data-view="grid"] {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+  margin-top: 8px;
+}
+#file-items[data-view="grid"] .file-item {
+  position: relative;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  margin-top: 0;
+  padding: 8px;
+}
+#file-items[data-view="grid"] .file-thumbnail {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 4 / 3;
+  border-radius: 7px;
+}
+#file-items[data-view="grid"] .file-info { flex: 0 0 auto; padding: 0 4px 4px; }
+#file-items[data-view="grid"] .file-added { display: none; }
+#file-items[data-view="grid"] .remove-file {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+/* Phones: roomier touch targets, less metadata. */
+@media (max-width: 760px) {
+  .view-toggle button { width: 40px; height: 38px; }
+  .remove-file { width: 40px; height: 40px; }
+  #file-items[data-view="grid"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #file-items[data-view="grid"] .remove-file { width: 36px; height: 36px; top: 12px; right: 12px; }
+}
+@media (max-width: 480px) {
+  #file-items[data-view="list"] .file-added { display: none; }
+}
+@media (max-width: 339px) {
+  #file-items[data-view="grid"] { grid-template-columns: minmax(0, 1fr); }
+}

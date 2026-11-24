@@ -50,3 +50,20 @@ export function describeSizeChange(originalSize, outputSize) {
   const percentage = ((Math.abs(difference) / originalSize) * 100).toFixed(1);
   return difference < 0 ? `${percentage}% smaller` : `${percentage}% larger`;
 }
+
+// "14:32" for today, "Nov 21, 14:32" for earlier days.
+export function formatAddedTime(timestamp, now = Date.now()) {
+  if (!Number.isFinite(timestamp)) return "";
+  const date = new Date(timestamp);
+  const sameDay = date.toDateString() === new Date(now).toDateString();
+  try {
+    return new Intl.DateTimeFormat(
+      undefined,
+      sameDay
+        ? { timeStyle: "short" }
+        : { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }
+    ).format(date);
+  } catch {
+    return date.toLocaleString();
+  }
+}

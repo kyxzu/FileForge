@@ -9,7 +9,8 @@ import { detectEncodableFormats } from "../lib/imageProcessing.js";
 import { OPERATIONS, DEFAULT_SETTINGS, validateSettings, runOperation } from "../lib/operations.js";
 import { STATUS, STATUS_LABELS, createBatchRunner, summarizeItems } from "../lib/batchQueue.js";
 import { createHistoryRecord, saveHistoryRecords, newId } from "../lib/history.js";
-import { showToast } from "../lib/toast.js";
+import { showToast, notify } from "../lib/toast.js";
+import { withUserDefaults } from "../lib/settings.js";
 import { confirmDialog } from "./confirmDialog.js";
 import { createSettingsPanel } from "./batchSettings.js";
 
@@ -37,7 +38,7 @@ export function openBatchDialog(upload) {
 
   // ---------------- state ----------------
   let operation = "resize";
-  const savedSettings = structuredClone(DEFAULT_SETTINGS);
+  const savedSettings = withUserDefaults(DEFAULT_SETTINGS);
   let panel = null;
   let items = [];
   const rows = new Map(); // item id -> { root, chip, meta, error, actions, ... }
@@ -375,7 +376,7 @@ export function openBatchDialog(upload) {
     const settings = panel.read();
     const problem = validateSettings(operation, settings);
     if (problem) {
-      showToast(problem);
+      notify({ type: "warning", title: "Check the settings", message: problem });
       return;
     }
 
@@ -426,11 +427,19 @@ export function openBatchDialog(upload) {
     const summary = await runPromise;
     if (dialog.isConnected) {
       const finalSummary = summarizeItems(items);
-      showToast(
-        runner.wasCancelled()
-          ? `Batch cancelled: ${finalSummary.completed} completed, ${finalSummary.cancelled} cancelled.`
-          : `Batch finished: ${summary.completed} completed, ${summary.failed} failed.`
-      );
+      if (runner.wasCancelled()) {
+        notify({
+          type: "warning",
+          title: "Batch cancelled",
+          message: `${finalSummary.completed} completed, ${finalSummary.cancelled} cancelled.`,
+        });
+      } else {
+        notify({
+          type: summary.failed > 0 ? "warning" : "success",
+          title: "Batch finished",
+          message: `${summary.completed} completed, ${summary.failed} failed.`,
+        });
+      }
     }
   }
 
@@ -448,7 +457,7 @@ export function openBatchDialog(upload) {
       );
       downloadBlob(archive, `fileforge-batch-${timestampForFilename()}.zip`);
     } catch (error) {
-      showToast(error.message || "Could not prepare the ZIP archive.");
+      notify({ type: "error", title: "ZIP failed", message: error.message || "Could not prepare the ZIP archive." });
     } finally {
       zipButton.disabled = false;
       zipButton.textContent = label;

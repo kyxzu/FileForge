@@ -1,0 +1,91 @@
+/* Settings dialog. Same dialog rules as the other modals (see dialogs.css). */
+
+.settings-dialog {
+  width: min(600px, calc(100% - 32px));
+  max-width: calc(100% - 32px);
+  max-height: min(90dvh, 900px);
+  margin: auto;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: var(--surface);
+  color: var(--text);
+  overflow: auto;
+  overscroll-behavior: contain;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+}
+.settings-dialog::backdrop { background: rgba(0, 0, 0, 0.56); backdrop-filter: blur(3px); }
+
+.settings-body { display: grid; gap: 4px; padding: 4px 22px 22px; }
+
+.settings-section {
+  display: grid;
+  gap: 14px;
+  padding: 18px 0;
+  border-bottom: 1px solid var(--border);
+}
+.settings-section:last-child { border-bottom: 0; padding-bottom: 0; }
+.settings-section h3 { font-size: 15px; font-weight: 620; }
+
+.settings-field { display: grid; gap: 8px; min-width: 0; border: 0; }
+.settings-field > label,
+.settings-field > legend { font-size: 13px; color: var(--muted); }
+.settings-field select,
+.settings-field input[type="number"] {
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+}
+.settings-field input[type="range"] { width: 100%; accent-color: var(--accent); }
+.settings-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+
+.settings-choices { display: flex; flex-wrap: wrap; gap: 8px; }
+.settings-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  padding: 6px 14px 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 14px;
+  cursor: pointer;
+}
+.settings-choice:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.settings-choice:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.settings-choice input { accent-color: var(--accent); width: 16px; height: 16px; }
+.settings-field > .settings-choice { width: fit-content; max-width: 100%; }
+
+.settings-hint { color: var(--muted); font-size: 13px; line-height: 1.5; }
+.settings-error { color: var(--err); font-size: 13px; }
+.settings-list { display: grid; gap: 8px; padding-left: 18px; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.settings-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.settings-about { font-weight: 600; }
+.settings-link { width: fit-content; text-decoration: none; }
+
+@media (max-width: 640px) {
+  .settings-dialog {
+    width: 100%;
+    max-width: 100%;
+    margin: auto 0 0;
+    max-height: calc(100dvh - max(16px, env(safe-area-inset-top, 0px)));
+    border-bottom: 0;
+    border-radius: 16px 16px 0 0;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    animation: sheet-in 0.22s ease;
+  }
+  .settings-dialog .converter-header { padding-top: max(18px, env(safe-area-inset-top, 0px)); }
+  .settings-dialog .converter-close { flex: 0 0 44px; width: 44px; height: 44px; }
+  .settings-body { padding-left: 18px; padding-right: 18px; }
+  .settings-actions .button { flex: 1 1 100%; min-height: 44px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-dialog { animation: none; }
+}
